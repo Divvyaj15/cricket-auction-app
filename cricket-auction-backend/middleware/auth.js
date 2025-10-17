@@ -1,22 +1,28 @@
 const jwt = require('jsonwebtoken');
-const JWT_SECRET = process.env.JWT_SECRET || 'your_secret_key_change_in_production';
+const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key';
 
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
-    if (!token) return res.status(401).json({ error: 'Access denied' });
+    if (!token) {
+        return res.status(401).json({ error: 'Access token required' });
+    }
 
     jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) return res.status(403).json({ error: 'Invalid token' });
-        req.user = user;
+        if (err) {
+            return res.status(403).json({ error: 'Invalid or expired token' });
+        }
+        req.user = user; // { id: userId }
         next();
     });
 };
 
 const requireAdmin = (req, res, next) => {
-    if (req.user.role !== 'host') {
-        return res.status(403).json({ error: 'Host access required' });
+    // Check if user is admin (you'll need to implement this based on your user model)
+    // For now, this is a placeholder - you should check the user's role from the database
+    if (!req.user || !req.user.isAdmin) {
+        return res.status(403).json({ error: 'Admin access required' });
     }
     next();
 };

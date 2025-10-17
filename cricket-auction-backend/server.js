@@ -1,9 +1,11 @@
-// server.js - Main server file
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
 const socketIo = require('socket.io');
+const dotenv = require('dotenv');
+dotenv.config();
 const { Pool } = require('pg');
+require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
@@ -12,14 +14,17 @@ const io = socketIo(server, {
 });
 
 // Database connection
-const pool = new Pool({
-    user: 'postgres',
-    host: 'localhost',
-    database: 'cricket_auction',
-    password: 'Parasmal@601',
-    port: 5432,
-});
-
+const pool = new Pool(
+  process.env.DATABASE_URL
+    ? { connectionString: process.env.DATABASE_URL }
+    : {
+        user: process.env.PGUSER || 'postgres',
+        host: process.env.PGHOST || 'localhost',
+        database: process.env.PGDATABASE || 'cricket_auction',
+        password: process.env.PGPASSWORD || '', // set in .env
+        port: Number(process.env.PGPORT) || 5432,
+      }
+);
 app.use(cors());
 app.use(express.json());
 
@@ -27,22 +32,22 @@ app.use(express.json());
 app.set('db', pool);
 app.set('io', io);
 
-// Routes
+// Import routes
 const authRoutes = require('./routes/auth');
 const tournamentRoutes = require('./routes/tournaments');
-const playerRoutes = require('./routes/players');
 const teamRoutes = require('./routes/teams');
+const playerRoutes = require('./routes/players');
 const auctionRoutes = require('./routes/auction');
 
+// Use routes
 app.use('/api/auth', authRoutes);
 app.use('/api/tournaments', tournamentRoutes);
-app.use('/api/players', playerRoutes);
 app.use('/api/teams', teamRoutes);
+app.use('/api/players', playerRoutes);
 app.use('/api/auction', auctionRoutes);
-// Admin routes removed per user request
 
-// Socket.io connection
+// Socket.io
 require('./socket/auctionSocket')(io, pool);
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+server.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
