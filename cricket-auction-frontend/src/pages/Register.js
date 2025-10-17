@@ -1,5 +1,3 @@
-// src/pages/Register.js
-// ============================================
 import React, { useState, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
@@ -9,8 +7,7 @@ const Register = () => {
     const [formData, setFormData] = useState({
         email: '',
         password: '',
-        name: '',
-        role: 'team_member'
+        name: ''
     });
     const [error, setError] = useState('');
     const { login } = useContext(AuthContext);
@@ -24,8 +21,7 @@ const Register = () => {
             const data = await authAPI.register(
                 formData.email,
                 formData.password,
-                formData.name,
-                formData.role
+                formData.name
             );
 
             if (data.error) {
@@ -83,18 +79,6 @@ const Register = () => {
                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             required
                         />
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">I am a</label>
-                        <select
-                            value={formData.role}
-                            onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                            <option value="team_member">Team Owner/Captain</option>
-                            <option value="host">Auction Host</option>
-                        </select>
                     </div>
 
                     <button

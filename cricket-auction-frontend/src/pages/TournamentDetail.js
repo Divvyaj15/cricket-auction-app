@@ -3,12 +3,21 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import { tournamentAPI, teamAPI, playerAPI } from '../services/api';
+import { tournamentAPI, teamAPI, playerAPI, auctionAPI } from '../services/api';
+import {
+    connectSocket,
+    joinTournament as joinTournamentRoom,
+    leaveTournament as leaveTournamentRoom,
+    onAuctionStarted,
+    onNewBid,
+    onTeamGaveUp,
+    onAuctionEnded
+} from '../services/socket';
 import BulkPlayerImport from '../components/BulkPlayerImport';
 
 const TournamentDetail = () => {
     const { id } = useParams();
-    const { user } = useContext(AuthContext);
+    const { user, token } = useContext(AuthContext);
     const navigate = useNavigate();
     
     const [tournament, setTournament] = useState(null);
@@ -24,38 +33,106 @@ const TournamentDetail = () => {
     });
     
     const [showJoinModal, setShowJoinModal] = useState(false);
+    const [showJoinByCodeModal, setShowJoinByCodeModal] = useState(false);
     const [showAddPlayerModal, setShowAddPlayerModal] = useState(false);
+    const [auctionEnded, setAuctionEnded] = useState(false);
     const [showInviteCaptainModal, setShowInviteCaptainModal] = useState(false);
+    const [liveAuctionBanner, setLiveAuctionBanner] = useState(null);
     
     const [teamName, setTeamName] = useState('');
+    const [maxPerTeamInput, setMaxPerTeamInput] = useState(0);
     const [isOwnerAlsoCaptain, setIsOwnerAlsoCaptain] = useState(true);
     const [captainEmail, setCaptainEmail] = useState('');
     const [selectedTeamForCaptain, setSelectedTeamForCaptain] = useState(null);
+    const [joinCode, setJoinCode] = useState('');
+    // Non-hosts join by code as Owner by default
     
     const [newPlayer, setNewPlayer] = useState({
         name: '',
         role: 'batsman',
-        base_price: 50000
+        // Store in Lakhs on the client; backend will convert
+        base_price: 2.5
     });
 
     useEffect(() => {
         fetchTournamentData();
-    }, [id]);
+
+        // Join socket room for live updates
+        connectSocket(token);
+        joinTournamentRoom(id);
+        onAuctionStarted((data) => {
+            setLiveAuctionBanner({ playerName: data.player.name });
+        });
+
+        onNewBid((data) => {
+            // Show live bid updates in the banner if present
+            setLiveAuctionBanner(prev => prev ? {
+                ...prev,
+                lastBidTeam: data.team_name,
+                lastBidAmountL: (data.bid_amount / 100000).toFixed(2)
+            } : prev);
+        });
+
+        onTeamGaveUp((data) => {
+            setLiveAuctionBanner(prev => ({
+                ...(prev || {}),
+                playerName: data.player_name,
+                lastBidTeam: undefined,
+                lastBidAmountL: undefined,
+                gaveUpTeam: data.team_name
+            }));
+        });
+
+        // Listen for auction ended event
+        onAuctionEnded(() => {
+            setAuctionEnded(true);
+            setLiveAuctionBanner(null);
+        });
+
+        return () => {
+            leaveTournamentRoom(id);
+        };
+    }, [id, token]);
 
     const fetchTournamentData = async () => {
         const tournamentData = await tournamentAPI.getById(id);
         setTournament(tournamentData);
 
+        // Check if auction has ended based on tournament status
+        if (tournamentData.status === 'completed' || tournamentData.status === 'ended') {
+            setAuctionEnded(true);
+        }
+
         const teamsData = await teamAPI.getTeamsByTournament(id);
         setTeams(teamsData);
 
-        if (user.role === 'team_member') {
-            const myTeamsData = await teamAPI.getMyTeams(id);
-            setMyTeams(myTeamsData);
-        }
+        // Always fetch my teams to determine if user has joined
+        const myTeamsData = await teamAPI.getMyTeams(id);
+        setMyTeams(myTeamsData || []);
 
         const playersData = await playerAPI.getByTournament(id);
-        setPlayers(playersData);
+        
+        // For sold players, we need to get their purchase price
+        const playersWithPurchaseInfo = await Promise.all(playersData.map(async (player) => {
+            if (player.status === 'sold') {
+                try {
+                    // Get the team that purchased this player
+                    const teams = await teamAPI.getTeamsByTournament(id);
+                    for (const team of teams) {
+                        const purchases = await auctionAPI.getPurchases(team.id);
+                        const purchase = purchases.find(p => p.player_id === player.id);
+                        if (purchase) {
+                            return { ...player, purchase_price: purchase.purchase_price };
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error fetching purchase info for player:', player.id, error);
+                }
+            }
+            return player;
+        }));
+        
+        setPlayers(playersWithPurchaseInfo);
     };
 
     const handleJoinTournament = async (e) => {
@@ -69,13 +146,26 @@ const TournamentDetail = () => {
         }
     };
 
+    const handleJoinByCode = async (e) => {
+        e.preventDefault();
+        const data = await teamAPI.joinByCode(joinCode.trim().toUpperCase(), 'owner');
+        if (!data.error) {
+            setShowJoinByCodeModal(false);
+            setJoinCode('');
+            fetchTournamentData();
+            navigate(`/auction/${id}`);
+        } else {
+            alert(data.error);
+        }
+    };
+
     const handleAddPlayer = async (e) => {
         e.preventDefault();
         const data = await playerAPI.add(id, newPlayer.name, newPlayer.role, newPlayer.base_price);
         
         if (!data.error) {
             setShowAddPlayerModal(false);
-            setNewPlayer({ name: '', role: 'batsman', base_price: 50000 });
+            setNewPlayer({ name: '', role: 'batsman', base_price: 2.5 });
             fetchTournamentData();
         }
     };
@@ -95,7 +185,7 @@ const TournamentDetail = () => {
         }
     };
 
-    const isHost = user?.role === 'host' && tournament?.host_id === user?.id;
+    const isHost = tournament?.host_id === user?.id;
     const hasJoined = myTeams.length > 0;
 
     if (!tournament) {
@@ -123,6 +213,22 @@ const TournamentDetail = () => {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 {/* Tournament Info Card */}
                 <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                    {liveAuctionBanner && (
+                        <div className="mb-4 bg-indigo-50 border border-indigo-200 text-indigo-800 px-4 py-3 rounded flex justify-between items-center">
+                            <span>
+                                Auction started for <strong>{liveAuctionBanner.playerName}</strong>
+                                {liveAuctionBanner.lastBidAmountL && (
+                                    <> — current bid ₹{liveAuctionBanner.lastBidAmountL} L by {liveAuctionBanner.lastBidTeam}</>
+                                )}
+                            </span>
+                            <button
+                                onClick={() => navigate(`/auction/${id}`)}
+                                className="px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                            >
+                                Enter Auction Room
+                            </button>
+                        </div>
+                    )}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div>
                             <p className="text-sm text-gray-600">Host</p>
@@ -134,7 +240,7 @@ const TournamentDetail = () => {
                         </div>
                         <div>
                             <p className="text-sm text-gray-600">Budget per Team</p>
-                            <p className="text-lg font-semibold">₹{(tournament.team_budget / 100000).toFixed(1)} Cr</p>
+                            <p className="text-lg font-semibold">₹{(tournament.team_budget / 10000000).toFixed(2)} Cr</p>
                         </div>
                         <div>
                             <p className="text-sm text-gray-600">Status</p>
@@ -150,8 +256,8 @@ const TournamentDetail = () => {
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex space-x-4 mb-6">
-                    {isHost && (
+                <div className="flex flex-wrap gap-3 mb-6">
+                    {isHost && !auctionEnded && (
                         <>
                             <button
                                 onClick={() => setShowAddPlayerModal(true)}
@@ -159,29 +265,103 @@ const TournamentDetail = () => {
                             >
                                 Add Player
                             </button>
+                            <BulkPlayerImport
+                                tournamentId={id}
+                                onImportComplete={fetchTournamentData}
+                            />
                             <button
                                 onClick={() => navigate(`/auction/${id}`)}
-                                className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700"
+                                className="bg-orange-600 text-white px-6 py-2 rounded-lg hover:bg-orange-700"
                             >
-                                Go to Auction Room
+                                Start Auction
+                            </button>
+                            <div className="flex items-center gap-2">
+                                <label className="text-sm text-gray-700">Max players/team:</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    onChange={(e) => setMaxPerTeamInput(parseInt(e.target.value || '0'))}
+                                    className="w-24 px-2 py-1 border rounded"
+                                    placeholder="e.g., 11"
+                                />
+                                <button
+                                    onClick={async () => {
+                                        if (!maxPerTeamInput || maxPerTeamInput <= 0) return alert('Enter a valid number');
+                                        const res = await auctionAPI.setCapacity(id, maxPerTeamInput);
+                                        if (res.error) alert(res.error); else alert('Capacity updated');
+                                    }}
+                                    className="bg-gray-800 text-white px-4 py-2 rounded hover:bg-gray-900"
+                                >
+                                    Save Capacity
+                                </button>
+                            </div>
+                        </>
+                    )}
+                    {isHost && auctionEnded && (
+                        <button
+                            onClick={() => navigate(`/tournament/${id}/history`)}
+                            className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700"
+                        >
+                            View Auction History
+                        </button>
+                    )}
+                    {isHost && auctionEnded && (
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                            <div className="flex items-center">
+                                <svg className="w-5 h-5 text-red-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                                </svg>
+                                <p className="text-red-700 font-medium">Auction has ended. You cannot add players or start a new auction.</p>
+                            </div>
+                        </div>
+                    )}
+                    {!isHost && !hasJoined && (
+                        <>
+                            <button
+                                onClick={() => setShowJoinModal(true)}
+                                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+                            >
+                                Join Tournament
+                            </button>
+                            <button
+                                onClick={() => navigate(`/auction/${id}`)}
+                                className="bg-gray-700 text-white px-6 py-2 rounded-lg hover:bg-gray-800"
+                            >
+                                View Live Auction
                             </button>
                         </>
                     )}
                     {!isHost && !hasJoined && (
                         <button
-                            onClick={() => setShowJoinModal(true)}
-                            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+                            onClick={() => setShowJoinByCodeModal(true)}
+                            className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700"
                         >
-                            Join Tournament
+                            Join Team by Code
                         </button>
                     )}
                     {!isHost && hasJoined && (
-                        <button
-                            onClick={() => navigate(`/auction/${id}`)}
-                            className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700"
-                        >
-                            Enter Auction Room
-                        </button>
+                        <>
+                            <button
+                                onClick={() => navigate(`/auction/${id}`)}
+                                className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700"
+                            >
+                                Enter Auction Room
+                            </button>
+                            {myTeams[0] && (
+                                <button
+                                    onClick={() => navigate(`/team/${myTeams[0].id}/squad?tournamentId=${id}`)}
+                                    className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700"
+                                >
+                                    My Squad
+                                </button>
+                            )}
+                            <button
+                                onClick={() => navigate(`/tournament/${id}/history`)}
+                                className="bg-gray-700 text-white px-6 py-2 rounded-lg hover:bg-gray-800"
+                            >
+                                Auction History
+                            </button>
+                        </>
                     )}
                 </div>
 
@@ -222,9 +402,27 @@ const TournamentDetail = () => {
                         <div className="space-y-4">
                             {teams.map((team) => (
                                 <div key={team.id} className="border-b pb-4 last:border-b-0">
-                                    <p className="font-semibold">{team.team_name}</p>
+                                    <div className="flex items-center justify-between">
+                                        <button
+                                            onClick={() => navigate(`/team/${team.id}/squad?tournamentId=${id}`)}
+                                            className="font-semibold hover:underline text-left"
+                                        >
+                                            {team.team_name}
+                                        </button>
+                                        {isHost && (
+                                            <div className="text-xs text-gray-600">
+                                                Code: <code className="font-mono font-semibold">{team.unique_code}</code>
+                                                <button
+                                                    onClick={() => navigator.clipboard.writeText(team.unique_code)}
+                                                    className="ml-2 px-2 py-0.5 border rounded hover:bg-gray-50"
+                                                >
+                                                    Copy
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                     <p className="text-sm text-gray-600">
-                                        Budget: ₹{(team.remaining_budget / 100000).toFixed(2)} Cr
+                                        Budget: ₹{(team.remaining_budget / 100000).toFixed(2)} L
                                     </p>
                                     {team.members && (
                                         <div className="mt-2 text-sm">
@@ -247,7 +445,17 @@ const TournamentDetail = () => {
 
                     {/* Players List */}
                     <div className="bg-white rounded-lg shadow-md p-6">
-                        <h3 className="text-xl font-bold mb-4">Players ({players.length})</h3>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-xl font-bold">Players ({players.length})</h3>
+                            {isHost && (
+                                <button
+                                    onClick={() => navigate(`/tournament/${id}/history`)}
+                                    className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 text-sm"
+                                >
+                                    View Auction History
+                                </button>
+                            )}
+                        </div>
                         <div className="space-y-3 max-h-96 overflow-y-auto">
                             {players.map((player) => (
                                 <div key={player.id} className="border-b pb-3 last:border-b-0">
@@ -257,7 +465,14 @@ const TournamentDetail = () => {
                                             <p className="text-sm text-gray-600">{player.role}</p>
                                         </div>
                                         <div className="text-right">
-                                            <p className="text-sm font-semibold">₹{(player.base_price / 100000).toFixed(2)} Cr</p>
+                                            {player.status === 'sold' && player.purchase_price ? (
+                                                <>
+                                                    <p className="text-xs text-gray-500">Base: ₹{(player.base_price / 100000).toFixed(2)} L</p>
+                                                    <p className="text-lg font-bold text-green-600">₹{(player.purchase_price / 100000).toFixed(2)} L</p>
+                                                </>
+                                            ) : (
+                                                <p className="text-sm font-semibold">₹{(player.base_price / 100000).toFixed(2)} L</p>
+                                            )}
                                             <span className={`text-xs px-2 py-1 rounded ${
                                                 player.status === 'available' ? 'bg-green-100 text-green-800' :
                                                 player.status === 'sold' ? 'bg-blue-100 text-blue-800' :
@@ -331,6 +546,33 @@ const TournamentDetail = () => {
                 </div>
             )}
 
+            {/* Join by Team Code Modal (joins as Owner) */}
+            {showJoinByCodeModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg p-8 w-full max-w-md">
+                        <h3 className="text-2xl font-bold mb-4">Join Team by Code</h3>
+                        <form onSubmit={handleJoinByCode} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Team Code</label>
+                                <input
+                                    type="text"
+                                    value={joinCode}
+                                    onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg font-mono"
+                                    placeholder="TEAM-XXXXXX"
+                                    required
+                                />
+                            </div>
+                            <p className="text-sm text-gray-600">You will join as <span className="font-semibold">Owner</span> of the team.</p>
+                            <div className="flex space-x-4">
+                                <button type="submit" className="flex-1 bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700">Join</button>
+                                <button type="button" onClick={() => setShowJoinByCodeModal(false)} className="flex-1 bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
             {/* Add Player Modal */}
             {showAddPlayerModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -372,8 +614,8 @@ const TournamentDetail = () => {
                                 </label>
                                 <input
                                     type="number"
-                                    value={newPlayer.base_price / 100000}
-                                    onChange={(e) => setNewPlayer({ ...newPlayer, base_price: parseFloat(e.target.value) * 100000 })}
+                                    value={newPlayer.base_price}
+                                    onChange={(e) => setNewPlayer({ ...newPlayer, base_price: parseFloat(e.target.value) })}
                                     className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                                     step="0.1"
                                     min="0.1"

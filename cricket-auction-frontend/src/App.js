@@ -1,5 +1,3 @@
-// src/App.js - Main App Component
-// ============================================
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
@@ -8,6 +6,9 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import TournamentDetail from './pages/TournamentDetail';
 import AuctionRoom from './pages/AuctionRoom';
+import AuctionSummary from './pages/AuctionSummary';
+import TeamSquad from './pages/TeamSquad';
+import AuctionHistory from './pages/AuctionHistory';
 import PrivateRoute from './components/PrivateRoute';
 
 function App() {
@@ -20,7 +21,9 @@ function App() {
                     <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
                     <Route path="/tournament/:id" element={<PrivateRoute><TournamentDetail /></PrivateRoute>} />
                     <Route path="/auction/:tournamentId" element={<PrivateRoute><AuctionRoom /></PrivateRoute>} />
-                    {null}
+                    <Route path="/team/:teamId/squad" element={<PrivateRoute><TeamSquad /></PrivateRoute>} />
+                    <Route path="/tournament/:tournamentId/history" element={<PrivateRoute><AuctionHistory /></PrivateRoute>} />
+                    <Route path="/tournament/:tournamentId/summary" element={<PrivateRoute><AuctionSummary /></PrivateRoute>} />
                     <Route path="/" element={<Navigate to="/dashboard" />} />
                 </Routes>
             </Router>

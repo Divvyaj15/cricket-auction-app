@@ -1,5 +1,3 @@
-// src/services/socket.js - Socket.io Service
-// ============================================
 import { io } from 'socket.io-client';
 
 let socket = null;
@@ -62,6 +60,18 @@ export const onAuctionFinalized = (callback) => {
 export const onCountdown = (callback) => {
     if (socket) {
         socket.on('countdown', callback);
+    }
+};
+
+export const onTeamGaveUp = (callback) => {
+    if (socket) {
+        socket.on('team_gave_up', callback);
+    }
+};
+
+export const onAuctionEnded = (callback) => {
+    if (socket) {
+        socket.on('auction_ended', callback);
     }
 };
 

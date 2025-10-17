@@ -27,9 +27,10 @@ router.post('/add', authenticateToken, async (req, res) => {
             return res.status(403).json({ error: 'Only tournament host can add players' });
         }
 
+        // Frontend sends price in Lakhs; store in rupees (Lakhs * 100000)
         const result = await pool.query(
             'INSERT INTO players (tournament_id, name, role, base_price) VALUES ($1, $2, $3, $4) RETURNING *',
-            [tournament_id, name, role, base_price * 100000]
+            [tournament_id, name, role, Math.round(parseFloat(base_price) * 100000)]
         );
         res.status(201).json(result.rows[0]);
     } catch (error) {

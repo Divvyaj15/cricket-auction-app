@@ -21,6 +21,13 @@ router.post('/create', authenticateToken, async (req, res) => {
     try {
         await client.query('BEGIN');
 
+        // Validate team_names count
+        const maxTeamsInt = parseInt(max_teams);
+        if (!Array.isArray(team_names) || team_names.length !== maxTeamsInt) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: `team_names must contain exactly ${maxTeamsInt} entries` });
+        }
+
         // Generate unique tournament code
         let tournamentCode = generateCode('TOUR');
         let exists = await client.query('SELECT id FROM tournaments WHERE unique_code = $1', [tournamentCode]);

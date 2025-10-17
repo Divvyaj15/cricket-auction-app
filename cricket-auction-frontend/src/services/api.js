@@ -1,5 +1,3 @@
-// src/services/api.js - API Service
-// ============================================
 const API_BASE_URL = 'http://localhost:5000/api';
 
 const getHeaders = () => {
@@ -12,11 +10,11 @@ const getHeaders = () => {
 
 // Auth APIs
 export const authAPI = {
-    register: async (email, password, name, role) => {
+    register: async (email, password, name) => {
         const response = await fetch(`${API_BASE_URL}/auth/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password, name, role })
+            body: JSON.stringify({ email, password, name })
         });
         return response.json();
     },
@@ -33,17 +31,35 @@ export const authAPI = {
 
 // Tournament APIs
 export const tournamentAPI = {
-    create: async (name, max_teams, team_budget) => {
-        const response = await fetch(`${API_BASE_URL}/tournaments`, {
+    create: async (name, max_teams, team_budget, team_names) => {
+        const response = await fetch(`${API_BASE_URL}/tournaments/create`, {
             method: 'POST',
             headers: getHeaders(),
-            body: JSON.stringify({ name, max_teams, team_budget })
+            body: JSON.stringify({ name, max_teams, team_budget, team_names })
         });
         return response.json();
     },
 
-    getAll: async () => {
-        const response = await fetch(`${API_BASE_URL}/tournaments`, {
+    joinByCode: async (tournament_code) => {
+        const response = await fetch(`${API_BASE_URL}/tournaments/join`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({ tournament_code })
+        });
+        return response.json();
+    },
+
+    // Get tournaments where current user is host
+    getMyTournaments: async () => {
+        const response = await fetch(`${API_BASE_URL}/tournaments/my-tournaments`, {
+            headers: getHeaders()
+        });
+        return response.json();
+    },
+
+    // Get tournaments where current user participates in a team
+    getMyParticipations: async () => {
+        const response = await fetch(`${API_BASE_URL}/tournaments/my-participations`, {
             headers: getHeaders()
         });
         return response.json();
@@ -59,20 +75,18 @@ export const tournamentAPI = {
 
 // Team APIs
 export const teamAPI = {
-    create: async (tournament_id, team_name, is_owner_also_captain) => {
-        const response = await fetch(`${API_BASE_URL}/teams/create`, {
+    joinByCode: async (team_code, role) => {
+        const response = await fetch(`${API_BASE_URL}/teams/join`, {
             method: 'POST',
             headers: getHeaders(),
-            body: JSON.stringify({ tournament_id, team_name, is_owner_also_captain })
+            body: JSON.stringify({ team_code, role })
         });
         return response.json();
     },
 
-    inviteCaptain: async (team_id, captain_email) => {
-        const response = await fetch(`${API_BASE_URL}/teams/invite-captain`, {
-            method: 'POST',
-            headers: getHeaders(),
-            body: JSON.stringify({ team_id, captain_email })
+    verifyTeamCode: async (team_code) => {
+        const response = await fetch(`${API_BASE_URL}/teams/verify/${team_code}`, {
+            headers: getHeaders()
         });
         return response.json();
     },
@@ -101,23 +115,32 @@ export const teamAPI = {
 
 // Player APIs
 export const playerAPI = {
-    add: async (tournament_id, name, role, base_price) => {
-        const response = await fetch(`${API_BASE_URL}/players`, {
+    add: async (tournament_id, name, role, base_price_lakhs) => {
+        const response = await fetch(`${API_BASE_URL}/players/add`, {
             method: 'POST',
             headers: getHeaders(),
-            body: JSON.stringify({ tournament_id, name, role, base_price })
+            body: JSON.stringify({ tournament_id, name, role, base_price: base_price_lakhs })
         });
         return response.json();
     },
 
-    bulkAdd: async (tournament_id, players) => {
-        const response = await fetch(`${API_BASE_URL}/players/bulk`, {
+    uploadCSV: async (tournament_id, file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('tournament_id', tournament_id);
+
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/players/upload-csv`, {
             method: 'POST',
-            headers: getHeaders(),
-            body: JSON.stringify({ tournament_id, players })
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            body: formData
         });
         return response.json();
     },
+
+    // No bulk endpoint on backend; use uploadCSV or call add() per player
 
     delete: async (playerId) => {
         const response = await fetch(`${API_BASE_URL}/players/${playerId}`, {
@@ -172,6 +195,15 @@ export const auctionAPI = {
         return response.json();
     },
 
+    warn: async (auction_round_id, seconds = 10) => {
+        const response = await fetch(`${API_BASE_URL}/auction/warn`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({ auction_round_id, seconds })
+        });
+        return response.json();
+    },
+
     getActiveAuction: async (tournamentId) => {
         const response = await fetch(`${API_BASE_URL}/auction/active/${tournamentId}`, {
             headers: getHeaders()
@@ -191,7 +223,48 @@ export const auctionAPI = {
             headers: getHeaders()
         });
         return response.json();
+    },
+
+    giveUp: async (auction_round_id, team_id) => {
+        const response = await fetch(`${API_BASE_URL}/auction/giveup`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({ auction_round_id, team_id })
+        });
+        return response.json();
+    },
+
+    getGiveUps: async (auctionRoundId) => {
+        const response = await fetch(`${API_BASE_URL}/auction/giveups/${auctionRoundId}`, {
+            headers: getHeaders()
+        });
+        return response.json();
+    },
+
+    setCapacity: async (tournament_id, max_players_per_team) => {
+        const response = await fetch(`${API_BASE_URL}/auction/capacity`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({ tournament_id, max_players_per_team })
+        });
+        return response.json();
+    },
+
+    distributeRemaining: async (tournament_id) => {
+        const response = await fetch(`${API_BASE_URL}/auction/distribute`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({ tournament_id })
+        });
+        return response.json();
+    },
+
+    endAuction: async (tournament_id) => {
+        const response = await fetch(`${API_BASE_URL}/auction/end`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({ tournament_id })
+        });
+        return response.json();
     }
 };
-
-// Admin APIs removed per user request

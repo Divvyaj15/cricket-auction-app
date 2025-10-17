@@ -13,7 +13,7 @@ const BulkPlayerImport = ({ tournamentId, onImportComplete }) => {
     const [errors, setErrors] = useState([]);
 
     const parseManualInput = (text) => {
-        // Format: Name,Role,BasePrice (one per line)
+        // Format: Name,Role,BasePrice (Lakhs) - one per line
         // Example: 
         // Virat Kohli,batsman,2.5
         // Jasprit Bumrah,bowler,3.0
@@ -31,7 +31,7 @@ const BulkPlayerImport = ({ tournamentId, onImportComplete }) => {
             }
 
             const [name, role, basePriceStr] = parts;
-            const basePrice = parseFloat(basePriceStr) * 100000; // Convert to lakhs
+            const basePrice = parseFloat(basePriceStr); // Keep in Lakhs; backend converts
 
             if (!name) {
                 parseErrors.push(`Line ${index + 1}: Name is required`);
@@ -79,18 +79,14 @@ const BulkPlayerImport = ({ tournamentId, onImportComplete }) => {
                     if (parts.length < 3) continue;
 
                     const [name, role, basePriceStr] = parts;
-                    const basePrice = parseFloat(basePriceStr) * 100000;
+                    const basePrice = parseFloat(basePriceStr);
 
                     if (!name || !role || isNaN(basePrice)) {
                         parseErrors.push(`Row ${i + 1}: Invalid data`);
                         continue;
                     }
 
-                    players.push({
-                        name,
-                        role: role.toLowerCase(),
-                        base_price: basePrice
-                    });
+                    players.push({ name, role: role.toLowerCase(), base_price: basePrice });
                 }
 
                 resolve({ players, errors: parseErrors });
@@ -131,18 +127,32 @@ const BulkPlayerImport = ({ tournamentId, onImportComplete }) => {
                 return;
             }
 
-            // Send to API
-            const data = await playerAPI.bulkAdd(tournamentId, result.players);
-
-            if (data.error) {
-                setErrors([data.error]);
+            // Prefer CSV upload if a file was provided and method is CSV
+            if (importMethod === 'csv' && csvFile) {
+                const data = await playerAPI.uploadCSV(tournamentId, csvFile);
+                if (data.error) {
+                    setErrors([data.error].concat(data.details || []));
+                    setLoading(false);
+                    return;
+                }
+                alert(data.message || `Successfully imported ${result.players.length} players!`);
             } else {
+                // Manual entry: add players one by one
+                for (const player of result.players) {
+                    const resp = await playerAPI.add(tournamentId, player.name, player.role, player.base_price);
+                    if (resp.error) {
+                        setErrors([resp.error]);
+                        setLoading(false);
+                        return;
+                    }
+                }
                 alert(`Successfully imported ${result.players.length} players!`);
-                setShowModal(false);
-                setTextInput('');
-                setCSVFile(null);
-                if (onImportComplete) onImportComplete();
             }
+
+            setShowModal(false);
+            setTextInput('');
+            setCSVFile(null);
+            if (onImportComplete) onImportComplete();
         } catch (error) {
             setErrors([error.message]);
         } finally {

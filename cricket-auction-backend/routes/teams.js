@@ -106,3 +106,18 @@ router.get('/my-teams/:tournamentId', authenticateToken, async (req, res) => {
 });
 
 module.exports = router;
+
+// Can current user bid for this team (owner or captain)
+router.get('/can-bid/:teamId', authenticateToken, async (req, res) => {
+    const pool = req.app.get('db');
+    try {
+        const result = await pool.query(
+            `SELECT 1 FROM team_members 
+             WHERE team_id = $1 AND user_id = $2 AND member_role IN ('owner','captain')`,
+            [req.params.teamId, req.user.id]
+        );
+        res.json({ can_bid: result.rows.length > 0 });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
