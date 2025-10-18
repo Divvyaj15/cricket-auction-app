@@ -22,9 +22,12 @@ if (result.error) {
 const { Pool } = require('pg');
 
 const app = express();
-const server = http.createServer(app);
+const server = http.createServer(app); 
 const io = socketIo(server, {
-    cors: { origin: 'http://localhost:3000', credentials: true }
+    cors: { 
+        origin: process.env.CLIENT_ORIGIN || 'http://localhost:3000', 
+        credentials: true 
+    }
 });
 
 // Database connection
@@ -39,7 +42,10 @@ const pool = new Pool(
         port: Number(process.env.PGPORT) || 5432,
       }
 );
-app.use(cors());
+app.use(cors({
+    origin: process.env.CLIENT_ORIGIN || 'http://localhost:3000',
+    credentials: true
+}));
 app.use(express.json());
 
 // Make pool and io available to routes
@@ -52,6 +58,7 @@ const tournamentRoutes = require('./routes/tournaments');
 const teamRoutes = require('./routes/teams');
 const playerRoutes = require('./routes/players');
 const auctionRoutes = require('./routes/auction');
+const healthRoutes = require('./health');
 
 // Use routes
 app.use('/api/auth', authRoutes);
@@ -59,6 +66,7 @@ app.use('/api/tournaments', tournamentRoutes);
 app.use('/api/teams', teamRoutes);
 app.use('/api/players', playerRoutes);
 app.use('/api/auction', auctionRoutes);
+app.use('/api', healthRoutes);
 
 // Socket.io
 require('./socket/auctionSocket')(io, pool);
