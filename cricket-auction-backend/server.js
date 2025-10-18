@@ -3,9 +3,23 @@ const cors = require('cors');
 const http = require('http');
 const socketIo = require('socket.io');
 const dotenv = require('dotenv');
-dotenv.config();
+const path = require('path');
+
+// Load environment variables
+const result = dotenv.config({ path: path.join(__dirname, '.env') });
+if (result.error) {
+    console.error('Error loading .env file:', result.error);
+} else {
+    console.log('✅ .env file loaded successfully');
+    console.log('Parsed result:', result.parsed);
+    console.log('Email config check:', {
+        EMAIL_SERVICE: process.env.EMAIL_SERVICE,
+        EMAIL_USER: process.env.EMAIL_USER,
+        EMAIL_PASS: process.env.EMAIL_PASS ? '***' : 'NOT SET'
+    });
+}
+
 const { Pool } = require('pg');
-require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
@@ -21,7 +35,7 @@ const pool = new Pool(
         user: process.env.PGUSER || 'postgres',
         host: process.env.PGHOST || 'localhost',
         database: process.env.PGDATABASE || 'cricket_auction',
-        password: process.env.PGPASSWORD || '', // set in .env
+        password: process.env.PGPASSWORD || 'Parasmal@601', // set in .env
         port: Number(process.env.PGPORT) || 5432,
       }
 );

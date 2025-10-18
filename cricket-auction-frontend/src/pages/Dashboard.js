@@ -8,6 +8,8 @@ const Dashboard = () => {
     const [participatingTournaments, setParticipatingTournaments] = useState([]);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showJoinModal, setShowJoinModal] = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [tournamentToDelete, setTournamentToDelete] = useState(null);
     const [loading, setLoading] = useState(true);
     const [tournamentCode, setTournamentCode] = useState('');
     const [newTournament, setNewTournament] = useState({
@@ -118,6 +120,31 @@ const Dashboard = () => {
         }
     };
 
+    const handleDeleteTournament = (tournament) => {
+        setTournamentToDelete(tournament);
+        setShowDeleteModal(true);
+    };
+
+    const confirmDeleteTournament = async () => {
+        if (!tournamentToDelete) return;
+
+        try {
+            const data = await tournamentAPI.delete(tournamentToDelete.id);
+            
+            if (data.error) {
+                alert('Error: ' + data.error);
+            } else {
+                alert('Tournament deleted successfully!');
+                setShowDeleteModal(false);
+                setTournamentToDelete(null);
+                fetchTournaments(); // Refresh the list
+            }
+        } catch (error) {
+            alert('Error deleting tournament');
+            console.error(error);
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-screen bg-gray-100">
@@ -191,31 +218,49 @@ const Dashboard = () => {
                             {hostedTournaments.map((tournament) => (
                                 <div
                                     key={tournament.id}
-                                    onClick={() => navigate(`/tournament/${tournament.id}`)}
-                                    className="bg-white rounded-2xl shadow-md hover:shadow-2xl transition-all cursor-pointer border border-gray-100 overflow-hidden group"
+                                    className="bg-white rounded-2xl shadow-md hover:shadow-2xl transition-all border border-gray-100 overflow-hidden group relative"
                                 >
                                     <div className="h-2 bg-gradient-to-r from-indigo-600 to-purple-600"></div>
                                     <div className="p-6">
-                                        <h4 className="text-xl font-bold text-gray-900 mb-4 group-hover:text-indigo-600 transition">
-                                            {tournament.name}
-                                        </h4>
-                                        <div className="space-y-2 text-sm">
-                                            <div className="flex justify-between">
-                                                <span className="text-gray-600">Code:</span>
-                                                <code className="font-mono font-semibold text-indigo-600">{tournament.unique_code}</code>
+                                        {/* Delete Button */}
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDeleteTournament(tournament);
+                                            }}
+                                            className="absolute top-4 right-4 p-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                            title="Delete Tournament"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                            </svg>
+                                        </button>
+
+                                        <div
+                                            onClick={() => navigate(`/tournament/${tournament.id}`)}
+                                            className="cursor-pointer"
+                                        >
+                                            <h4 className="text-xl font-bold text-gray-900 mb-4 group-hover:text-indigo-600 transition pr-8">
+                                                {tournament.name}
+                                            </h4>
+                                            <div className="space-y-2 text-sm">
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-600">Code:</span>
+                                                    <code className="font-mono font-semibold text-indigo-600">{tournament.unique_code}</code>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-600">Teams:</span>
+                                                    <span className="font-semibold">{tournament.max_teams}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-600">Budget:</span>
+                                                    <span className="font-semibold">₹{(tournament.team_budget / 100000).toFixed(1)} L</span>
+                                                </div>
                                             </div>
-                                            <div className="flex justify-between">
-                                                <span className="text-gray-600">Teams:</span>
-                                                <span className="font-semibold">{tournament.max_teams}</span>
-                                            </div>
-                                            <div className="flex justify-between">
-                                                <span className="text-gray-600">Budget:</span>
-                                                <span className="font-semibold">₹{(tournament.team_budget / 100000).toFixed(1)} L</span>
-                                            </div>
-                                        </div>
-                                        <div className="mt-4 pt-4 border-t">
-                                            <div className="text-center text-sm font-semibold text-indigo-600">
-                                                Manage →
+                                            <div className="mt-4 pt-4 border-t">
+                                                <div className="text-center text-sm font-semibold text-indigo-600">
+                                                    Manage →
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -416,6 +461,44 @@ const Dashboard = () => {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteModal && tournamentToDelete && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl p-8 w-full max-w-md">
+                        <div className="text-center">
+                            <div className="mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                                <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                                </svg>
+                            </div>
+                            <h3 className="text-2xl font-bold text-gray-900 mb-2">Delete Tournament</h3>
+                            <p className="text-gray-600 mb-6">
+                                Are you sure you want to delete <strong>"{tournamentToDelete.name}"</strong>? 
+                                This action cannot be undone and will remove all associated teams, players, and auction data.
+                            </p>
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={confirmDeleteTournament}
+                                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition"
+                            >
+                                Delete Tournament
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowDeleteModal(false);
+                                    setTournamentToDelete(null);
+                                }}
+                                className="px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-lg transition"
+                            >
+                                Cancel
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

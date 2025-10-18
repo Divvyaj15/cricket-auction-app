@@ -156,4 +156,66 @@ router.get('/:id', authenticateToken, async (req, res) => {
     }
 });
 
+// Delete tournament (only host can delete)
+router.delete('/:id', authenticateToken, async (req, res) => {
+    const pool = req.app.get('db');
+    const client = await pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        // First check if tournament exists and user is the host
+        const tournamentResult = await client.query(
+            'SELECT * FROM tournaments WHERE id = $1 AND host_id = $2',
+            [req.params.id, req.user.id]
+        );
+
+        if (tournamentResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Tournament not found or you are not the host' });
+        }
+
+        const tournament = tournamentResult.rows[0];
+
+        // Check if tournament has any active auctions
+        const activeAuctionResult = await client.query(
+            'SELECT COUNT(*) as count FROM auction_rounds WHERE tournament_id = $1 AND status = $2',
+            [req.params.id, 'active']
+        );
+
+        if (parseInt(activeAuctionResult.rows[0].count) > 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Cannot delete tournament with active auctions' });
+        }
+
+        // Delete in order to respect foreign key constraints
+        // 1. Delete auction rounds
+        await client.query('DELETE FROM auction_rounds WHERE tournament_id = $1', [req.params.id]);
+        
+        // 2. Delete team members
+        await client.query(
+            'DELETE FROM team_members WHERE team_id IN (SELECT id FROM teams WHERE tournament_id = $1)',
+            [req.params.id]
+        );
+        
+        // 3. Delete teams
+        await client.query('DELETE FROM teams WHERE tournament_id = $1', [req.params.id]);
+        
+        // 4. Delete players
+        await client.query('DELETE FROM players WHERE tournament_id = $1', [req.params.id]);
+        
+        // 5. Finally delete the tournament
+        await client.query('DELETE FROM tournaments WHERE id = $1', [req.params.id]);
+
+        await client.query('COMMIT');
+        res.json({ message: 'Tournament deleted successfully' });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Delete tournament error:', error);
+        res.status(500).json({ error: 'Failed to delete tournament' });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;

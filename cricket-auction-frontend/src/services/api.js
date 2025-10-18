@@ -26,6 +26,24 @@ export const authAPI = {
             body: JSON.stringify({ email, password })
         });
         return response.json();
+    },
+
+    verifyOTP: async (email, otp) => {
+        const response = await fetch(`${API_BASE_URL}/auth/verify-otp`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, otp })
+        });
+        return response.json();
+    },
+
+    resendOTP: async (email) => {
+        const response = await fetch(`${API_BASE_URL}/auth/resend-otp`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+        return response.json();
     }
 };
 
@@ -67,6 +85,14 @@ export const tournamentAPI = {
 
     getById: async (id) => {
         const response = await fetch(`${API_BASE_URL}/tournaments/${id}`, {
+            headers: getHeaders()
+        });
+        return response.json();
+    },
+
+    delete: async (id) => {
+        const response = await fetch(`${API_BASE_URL}/tournaments/${id}`, {
+            method: 'DELETE',
             headers: getHeaders()
         });
         return response.json();

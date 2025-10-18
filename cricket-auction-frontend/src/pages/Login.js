@@ -2,11 +2,14 @@ import React, { useState, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { authAPI } from '../services/api';
+import OTPVerification from '../components/OTPVerification';
 
 const Login = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [showOTPVerification, setShowOTPVerification] = useState(false);
+    const [unverifiedEmail, setUnverifiedEmail] = useState('');
     const { login } = useContext(AuthContext);
     const navigate = useNavigate();
 
@@ -17,7 +20,13 @@ const Login = () => {
         try {
             const data = await authAPI.login(email, password);
             if (data.error) {
-                setError(data.error);
+                if (data.needsVerification) {
+                    // User needs to verify email
+                    setUnverifiedEmail(data.email);
+                    setShowOTPVerification(true);
+                } else {
+                    setError(data.error);
+                }
             } else {
                 login(data.token, data.user);
                 navigate('/dashboard');
@@ -26,6 +35,22 @@ const Login = () => {
             setError('Login failed. Please try again.');
         }
     };
+
+    const handleBackToLogin = () => {
+        setShowOTPVerification(false);
+        setUnverifiedEmail('');
+        setError('');
+    };
+
+    // Show OTP verification if user needs to verify email
+    if (showOTPVerification) {
+        return (
+            <OTPVerification 
+                email={unverifiedEmail} 
+                onBack={handleBackToLogin}
+            />
+        );
+    }
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4">

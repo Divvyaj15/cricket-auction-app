@@ -2,6 +2,7 @@ import React, { useState, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { authAPI } from '../services/api';
+import OTPVerification from '../components/OTPVerification';
 
 const Register = () => {
     const [formData, setFormData] = useState({
@@ -10,6 +11,8 @@ const Register = () => {
         name: ''
     });
     const [error, setError] = useState('');
+    const [showOTPVerification, setShowOTPVerification] = useState(false);
+    const [registeredEmail, setRegisteredEmail] = useState('');
     const { login } = useContext(AuthContext);
     const navigate = useNavigate();
 
@@ -27,13 +30,30 @@ const Register = () => {
             if (data.error) {
                 setError(data.error);
             } else {
-                login(data.token, data.user);
-                navigate('/dashboard');
+                // Show OTP verification instead of logging in immediately
+                setRegisteredEmail(formData.email);
+                setShowOTPVerification(true);
             }
         } catch (err) {
             setError('Registration failed. Please try again.');
         }
     };
+
+    const handleBackToRegistration = () => {
+        setShowOTPVerification(false);
+        setRegisteredEmail('');
+        setError('');
+    };
+
+    // Show OTP verification if user has registered
+    if (showOTPVerification) {
+        return (
+            <OTPVerification 
+                email={registeredEmail} 
+                onBack={handleBackToRegistration}
+            />
+        );
+    }
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4">
