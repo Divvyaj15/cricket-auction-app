@@ -46,13 +46,7 @@ const AuctionRoom = () => {
 
     const isHost = !!(tournament && user && tournament.host_id === user.id);
 
-    useEffect(() => {
-        initializeAuctionRoom();
-        
-        return () => {
-            disconnectSocket();
-        };
-    }, [initializeAuctionRoom]);
+
 
     const fetchTournamentData = useCallback(async () => {
         // Fetch all teams
@@ -212,6 +206,14 @@ const AuctionRoom = () => {
             setTimeout(() => navigate(`/tournament/${tournamentId}/summary`), 1000);
         });
     }, [tournamentId, token, fetchTournamentData, navigate]);
+
+    useEffect(() => {
+        initializeAuctionRoom();
+        
+        return () => {
+            disconnectSocket();
+        };
+    }, [initializeAuctionRoom]);
 
     const handleStartAuction = async (player) => {
         try {

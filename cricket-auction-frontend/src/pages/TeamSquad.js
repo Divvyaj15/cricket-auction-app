@@ -1,12 +1,11 @@
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { AuthContext } from '../context/AuthContext';
 import { auctionAPI, teamAPI } from '../services/api';
 
 const TeamSquad = () => {
     const { teamId } = useParams();
     const navigate = useNavigate();
-    // const { user } = useContext(AuthContext);
+
 
     const [team, setTeam] = useState(null);
     const [players, setPlayers] = useState([]);

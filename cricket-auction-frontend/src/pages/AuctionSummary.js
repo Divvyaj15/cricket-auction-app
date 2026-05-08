@@ -1,6 +1,4 @@
-import React, { useEffect, useState, useContext } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { AuthContext } from '../context/AuthContext';
+import React, { useEffect, useState } from 'react';
 import { auctionAPI } from '../services/api';
 
 const AuctionSummary = () => {

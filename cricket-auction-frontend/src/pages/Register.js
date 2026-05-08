@@ -1,6 +1,5 @@
-import React, { useState, useContext } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { AuthContext } from '../context/AuthContext';
+import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { authAPI } from '../services/api';
 import OTPVerification from '../components/OTPVerification';
 
@@ -13,8 +12,7 @@ const Register = () => {
     const [error, setError] = useState('');
     const [showOTPVerification, setShowOTPVerification] = useState(false);
     const [registeredEmail, setRegisteredEmail] = useState('');
-    // const { login } = useContext(AuthContext);
-    // const navigate = useNavigate();
+
 
     const handleSubmit = async (e) => {
         e.preventDefault();

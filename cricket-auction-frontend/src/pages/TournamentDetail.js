@@ -56,45 +56,7 @@ const TournamentDetail = () => {
         base_price: 2.5
     });
 
-    useEffect(() => {
-        fetchTournamentData();
 
-        // Join socket room for live updates
-        connectSocket(token);
-        joinTournamentRoom(id);
-        onAuctionStarted((data) => {
-            setLiveAuctionBanner({ playerName: data.player.name });
-        });
-
-        onNewBid((data) => {
-            // Show live bid updates in the banner if present
-            setLiveAuctionBanner(prev => prev ? {
-                ...prev,
-                lastBidTeam: data.team_name,
-                lastBidAmountL: (data.bid_amount / 100000).toFixed(2)
-            } : prev);
-        });
-
-        onTeamGaveUp((data) => {
-            setLiveAuctionBanner(prev => ({
-                ...(prev || {}),
-                playerName: data.player_name,
-                lastBidTeam: undefined,
-                lastBidAmountL: undefined,
-                gaveUpTeam: data.team_name
-            }));
-        });
-
-        // Listen for auction ended event
-        onAuctionEnded(() => {
-            setAuctionEnded(true);
-            setLiveAuctionBanner(null);
-        });
-
-        return () => {
-            leaveTournamentRoom(id);
-        };
-    }, [id, token, fetchTournamentData]);
 
     const fetchTournamentData = useCallback(async () => {
         const tournamentData = await tournamentAPI.getById(id);
@@ -136,6 +98,46 @@ const TournamentDetail = () => {
         
         setPlayers(playersWithPurchaseInfo);
     }, [id]);
+
+    useEffect(() => {
+        fetchTournamentData();
+
+        // Join socket room for live updates
+        connectSocket(token);
+        joinTournamentRoom(id);
+        onAuctionStarted((data) => {
+            setLiveAuctionBanner({ playerName: data.player.name });
+        });
+
+        onNewBid((data) => {
+            // Show live bid updates in the banner if present
+            setLiveAuctionBanner(prev => prev ? {
+                ...prev,
+                lastBidTeam: data.team_name,
+                lastBidAmountL: (data.bid_amount / 100000).toFixed(2)
+            } : prev);
+        });
+
+        onTeamGaveUp((data) => {
+            setLiveAuctionBanner(prev => ({
+                ...(prev || {}),
+                playerName: data.player_name,
+                lastBidTeam: undefined,
+                lastBidAmountL: undefined,
+                gaveUpTeam: data.team_name
+            }));
+        });
+
+        // Listen for auction ended event
+        onAuctionEnded(() => {
+            setAuctionEnded(true);
+            setLiveAuctionBanner(null);
+        });
+
+        return () => {
+            leaveTournamentRoom(id);
+        };
+    }, [id, token, fetchTournamentData]);
 
     const handleJoinTournament = async (e) => {
         e.preventDefault();
