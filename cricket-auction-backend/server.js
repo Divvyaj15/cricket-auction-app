@@ -40,6 +40,9 @@ const pool = new Pool(
         database: process.env.PGDATABASE || 'cricket_auction',
         password: process.env.PGPASSWORD,
         port: Number(process.env.PGPORT) || 5432,
+        ssl: process.env.PGHOST && process.env.PGHOST !== 'localhost'
+          ? { rejectUnauthorized: false }
+          : false,
       }
 );
 app.use(cors());
