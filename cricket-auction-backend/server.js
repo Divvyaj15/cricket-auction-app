@@ -33,12 +33,12 @@ const io = socketIo(server, {
 // Database connection
 const pool = new Pool(
   process.env.DATABASE_URL
-    ? { connectionString: process.env.DATABASE_URL }
+    ? { connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } }
     : {
         user: process.env.PGUSER || 'postgres',
         host: process.env.PGHOST || 'localhost',
         database: process.env.PGDATABASE || 'cricket_auction',
-        password: process.env.PGPASSWORD || 'Parasmal@601', // set in .env
+        password: process.env.PGPASSWORD,
         port: Number(process.env.PGPORT) || 5432,
       }
 );
