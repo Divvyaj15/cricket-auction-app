@@ -13,8 +13,8 @@ const Register = () => {
     const [error, setError] = useState('');
     const [showOTPVerification, setShowOTPVerification] = useState(false);
     const [registeredEmail, setRegisteredEmail] = useState('');
-    const { login } = useContext(AuthContext);
-    const navigate = useNavigate();
+    // const { login } = useContext(AuthContext);
+    // const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
         e.preventDefault();

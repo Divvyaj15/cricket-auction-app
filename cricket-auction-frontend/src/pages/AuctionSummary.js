@@ -6,7 +6,7 @@ import { auctionAPI } from '../services/api';
 const AuctionSummary = () => {
     const { tournamentId } = useParams();
     const navigate = useNavigate();
-    const { user } = useContext(AuthContext);
+    // const { user } = useContext(AuthContext);
 
     const [teams, setTeams] = useState([]);
     const [purchases, setPurchases] = useState([]);

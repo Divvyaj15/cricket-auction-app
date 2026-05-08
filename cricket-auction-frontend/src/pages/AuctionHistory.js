@@ -9,7 +9,6 @@ const AuctionHistory = () => {
 
     const [sold, setSold] = useState([]);
     const [unsold, setUnsold] = useState([]);
-    const [teams, setTeams] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -19,7 +18,7 @@ const AuctionHistory = () => {
                     teamAPI.getTeamsByTournament(tournamentId),
                     playerAPI.getByTournament(tournamentId)
                 ]);
-                setTeams(allTeams || []);
+                // setTeams(allTeams || []);
 
                 // Get sold players with purchase details
                 const soldPlayers = [];

@@ -1,6 +1,6 @@
 // src/pages/TournamentDetail.js
 // ============================================
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { tournamentAPI, teamAPI, playerAPI, auctionAPI } from '../services/api';
@@ -24,6 +24,7 @@ const TournamentDetail = () => {
     const [teams, setTeams] = useState([]);
     const [myTeams, setMyTeams] = useState([]);
     const [players, setPlayers] = useState([]);
+    /*
     const [playerStats, setPlayerStats] = useState({
         total: 0,
         available: 0,
@@ -31,6 +32,7 @@ const TournamentDetail = () => {
         unsold: 0,
         in_auction: 0
     });
+    */
     
     const [showJoinModal, setShowJoinModal] = useState(false);
     const [showJoinByCodeModal, setShowJoinByCodeModal] = useState(false);
@@ -92,9 +94,9 @@ const TournamentDetail = () => {
         return () => {
             leaveTournamentRoom(id);
         };
-    }, [id, token]);
+    }, [id, token, fetchTournamentData]);
 
-    const fetchTournamentData = async () => {
+    const fetchTournamentData = useCallback(async () => {
         const tournamentData = await tournamentAPI.getById(id);
         setTournament(tournamentData);
 
@@ -133,7 +135,7 @@ const TournamentDetail = () => {
         }));
         
         setPlayers(playersWithPurchaseInfo);
-    };
+    }, [id]);
 
     const handleJoinTournament = async (e) => {
         e.preventDefault();

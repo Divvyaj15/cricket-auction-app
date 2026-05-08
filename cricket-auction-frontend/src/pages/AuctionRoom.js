@@ -1,6 +1,6 @@
 // src/pages/AuctionRoom.js
 // ============================================
-import React, { useState, useEffect, useContext, useRef } from 'react';
+import React, { useState, useEffect, useContext, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { tournamentAPI, teamAPI, playerAPI, auctionAPI } from '../services/api';
@@ -52,9 +52,9 @@ const AuctionRoom = () => {
         return () => {
             disconnectSocket();
         };
-    }, []);
+    }, [initializeAuctionRoom]);
 
-    const fetchTournamentData = async () => {
+    const fetchTournamentData = useCallback(async () => {
         // Fetch all teams
         const teamsData = await teamAPI.getTeamsByTournament(tournamentId);
         setAllTeams(teamsData);
@@ -106,9 +106,9 @@ const AuctionRoom = () => {
                 setHasGivenUp(userTeamGivenUp || false);
             }
         }
-    };
+    }, [tournamentId]);
 
-    const initializeAuctionRoom = async () => {
+    const initializeAuctionRoom = useCallback(async () => {
         // Fetch tournament data
         const tournamentData = await tournamentAPI.getById(tournamentId);
         setTournament(tournamentData);
@@ -117,7 +117,7 @@ const AuctionRoom = () => {
         await fetchTournamentData();
 
         // Setup Socket.io
-        const socket = connectSocket(token);
+        connectSocket(token);
         joinTournament(tournamentId);
 
         // Listen for real-time events
@@ -211,7 +211,7 @@ const AuctionRoom = () => {
             // brief delay then redirect to summary
             setTimeout(() => navigate(`/tournament/${tournamentId}/summary`), 1000);
         });
-    };
+    }, [tournamentId, token, fetchTournamentData, navigate]);
 
     const handleStartAuction = async (player) => {
         try {

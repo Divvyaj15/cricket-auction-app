@@ -6,7 +6,7 @@ import { auctionAPI, teamAPI } from '../services/api';
 const TeamSquad = () => {
     const { teamId } = useParams();
     const navigate = useNavigate();
-    const { user } = useContext(AuthContext);
+    // const { user } = useContext(AuthContext);
 
     const [team, setTeam] = useState(null);
     const [players, setPlayers] = useState([]);
