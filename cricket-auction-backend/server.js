@@ -24,7 +24,10 @@ const { Pool } = require('pg');
 const app = express();
 const server = http.createServer(app); 
 const io = socketIo(server, {
-    cors: { origin: 'http://localhost:3000', credentials: true }
+    cors: { 
+        origin: process.env.FRONTEND_URL || 'http://localhost:3000', 
+        credentials: true 
+    }
 });
 
 // Database connection

@@ -5,7 +5,8 @@ let socket = null;
 export const connectSocket = (token) => {
     if (socket) return socket;
 
-    socket = io('http://localhost:5000', {
+    const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
+    socket = io(backendUrl, {
         auth: { token }
     });
 
