@@ -51,7 +51,7 @@ router.post('/start', authenticateToken, async (req, res) => {
             return res.status(403).json({ error: 'Only the tournament host can start an auction' });
         }
 
-        // Check that all teams have owners AND all owners are connected
+        // Check that all teams have an owner assigned
         const allTeams = await pool.query(
             'SELECT id, team_name FROM teams WHERE tournament_id = $1',
             [tournament_id]
@@ -77,27 +77,7 @@ router.post('/start', authenticateToken, async (req, res) => {
             const names = teamsWithoutOwner.map(t => t.team_name).join(', ');
             return res.status(400).json({ 
                 error: `Cannot start auction. These teams have no owner yet: ${names}`,
-                missing_teams: teamsWithoutOwner.map(t => ({ team_id: t.id, team_name: t.team_name })),
-                connected: 0,
-                total: allTeams.rows.length
-            });
-        }
-
-        // Now check all owners are connected via socket
-        const connectedOwners = io.getConnectedOwners ? io.getConnectedOwners(tournament_id) : [];
-        const connectedOwnerUserIds = new Set(connectedOwners.map(o => o.user_id));
-
-        const missingOwners = teamsWithOwners.rows.filter(
-            row => !connectedOwnerUserIds.has(row.user_id)
-        );
-
-        if (missingOwners.length > 0) {
-            const missingNames = missingOwners.map(o => o.team_name).join(', ');
-            return res.status(400).json({ 
-                error: `Cannot start auction. Waiting for team owners to join the auction room: ${missingNames}`,
-                missing_teams: missingOwners.map(o => ({ team_id: o.id, team_name: o.team_name })),
-                connected: connectedOwners.length,
-                total: teamsWithOwners.rows.length
+                missing_teams: teamsWithoutOwner.map(t => ({ team_id: t.id, team_name: t.team_name }))
             });
         }
 

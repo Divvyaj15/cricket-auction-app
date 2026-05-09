@@ -13,7 +13,6 @@ import {
     onAuctionFinalized,
     onTeamGaveUp,
     onAuctionEnded,
-    onOwnerPresenceUpdate,
     getSocket
 } from '../services/socket';
 
@@ -44,13 +43,11 @@ const AuctionRoom = () => {
     const [teamPurchasesMap, setTeamPurchasesMap] = useState({}); // teamId -> players[]
     const [hoverLoadingTeamId, setHoverLoadingTeamId] = useState(null);
     const hoverCloseTimerRef = useRef(null);
-    const [connectedOwners, setConnectedOwners] = useState([]);
 
     const isHost = !!(tournament && user && tournament.host_id === user.id);
+    // Check if every team has at least one owner assigned
     const allOwnersReady = allTeams.length > 0 && allTeams.every(team => {
-        const hasOwner = team.members && team.members.some(m => m.role === 'owner');
-        if (!hasOwner) return false; // Team has no owner yet — not ready
-        return connectedOwners.some(o => o.team_id === team.id);
+        return team.members && team.members.some(m => m.role === 'owner');
     });
 
 
@@ -211,11 +208,6 @@ const AuctionRoom = () => {
             setMessage('Auction has ended');
             // brief delay then redirect to summary
             setTimeout(() => navigate(`/tournament/${tournamentId}/summary`), 1000);
-        });
-
-        // Owner presence updates
-        onOwnerPresenceUpdate((data) => {
-            setConnectedOwners(data.connected_owners || []);
         });
     }, [tournamentId, token, fetchTournamentData, navigate]);
 
@@ -443,21 +435,29 @@ const AuctionRoom = () => {
                                 </button>
                             </div>
                         </div>
-                        {/* Team Owner Presence Panel */}
+                        {/* Team Owner Status Panel */}
                         <div className={`rounded-lg p-3 ${allOwnersReady ? 'bg-green-900 bg-opacity-40' : 'bg-yellow-900 bg-opacity-40'}`}>
-                            <p className={`text-sm font-semibold mb-2 ${allOwnersReady ? 'text-green-300' : 'text-yellow-300'}`}>
-                                {allOwnersReady ? '✅ All team owners are connected' : '⏳ Waiting for team owners to join...'}
-                            </p>
+                            <div className="flex items-center justify-between mb-2">
+                                <p className={`text-sm font-semibold ${allOwnersReady ? 'text-green-300' : 'text-yellow-300'}`}>
+                                    {allOwnersReady ? '✅ All teams have owners assigned' : '⏳ Waiting for all teams to have owners...'}
+                                </p>
+                                <button
+                                    onClick={fetchTournamentData}
+                                    className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded transition"
+                                >
+                                    🔄 Refresh
+                                </button>
+                            </div>
                             <div className="flex flex-wrap gap-2">
                                 {allTeams.map(team => {
-                                    const ownerConnected = connectedOwners.some(o => o.team_id === team.id);
+                                    const hasOwner = team.members && team.members.some(m => m.role === 'owner');
                                     return (
                                         <span key={team.id} className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                            ownerConnected 
+                                            hasOwner 
                                                 ? 'bg-green-600 text-white' 
                                                 : 'bg-gray-600 text-gray-300'
                                         }`}>
-                                            {ownerConnected ? '🟢' : '🔴'} {team.team_name}
+                                            {hasOwner ? '🟢' : '🔴'} {team.team_name}
                                         </span>
                                     );
                                 })}
