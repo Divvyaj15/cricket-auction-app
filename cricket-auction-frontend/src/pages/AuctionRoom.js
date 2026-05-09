@@ -164,6 +164,7 @@ const AuctionRoom = () => {
                     status: 'sold',
                     player_name: data.player_name,
                     team_name: data.winning_team_name,
+                    winning_team_id: data.winning_team_id,
                     price_lakhs: (data.final_price / 100000).toFixed(2)
                 });
             } else {
@@ -174,7 +175,7 @@ const AuctionRoom = () => {
                 });
             }
             
-            // Auto-refresh everything after 2 seconds
+            // Auto-refresh everything after 4 seconds
             setTimeout(() => {
                 setCurrentAuction(null);
                 setCurrentPlayer(null);
@@ -185,7 +186,7 @@ const AuctionRoom = () => {
                 
                 // Refresh all data
                 fetchTournamentData();
-            }, 2000);
+            }, 4000);
         });
 
         // Countdown updates
@@ -466,26 +467,72 @@ const AuctionRoom = () => {
                     </div>
                 )}
                 {/* Finalize Modal */}
-                {finalizeModal && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                        <div className="bg-white text-gray-900 rounded-lg p-6 w-full max-w-md shadow-2xl">
-                            <h3 className="text-2xl font-bold mb-4">{finalizeModal.status === 'sold' ? 'Player Sold' : 'Player Unsold'}</h3>
-                            <div className="space-y-2 mb-6">
-                                <p className="text-lg"><span className="font-semibold">Player:</span> {finalizeModal.player_name}</p>
-                                {finalizeModal.status === 'sold' && (
-                                    <>
-                                        <p><span className="font-semibold">Team:</span> {finalizeModal.team_name}</p>
-                                        <p><span className="font-semibold">Price:</span> ₹{finalizeModal.price_lakhs} L</p>
-                                    </>
+                {finalizeModal && (() => {
+                    const isMyTeamWinner = finalizeModal.status === 'sold' && selectedTeam && selectedTeam.id === finalizeModal.winning_team_id;
+                    const isSold = finalizeModal.status === 'sold';
+                    return (
+                        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" style={{animation: 'fadeIn 0.3s ease-out'}}>
+                            <div className={`rounded-2xl p-8 w-full max-w-md shadow-2xl text-center ${
+                                isMyTeamWinner 
+                                    ? 'bg-gradient-to-br from-green-600 to-emerald-700 text-white' 
+                                    : isSold 
+                                        ? 'bg-gradient-to-br from-purple-600 to-blue-700 text-white'
+                                        : 'bg-gradient-to-br from-red-600 to-red-800 text-white'
+                            }`} style={{animation: 'scaleIn 0.3s ease-out'}}>
+                                {/* Icon */}
+                                <div className="text-6xl mb-4">
+                                    {isMyTeamWinner ? '🎉' : isSold ? '🏏' : '😔'}
+                                </div>
+
+                                {/* Title */}
+                                <h3 className="text-3xl font-black mb-2">
+                                    {isMyTeamWinner ? 'CONGRATULATIONS!' : isSold ? 'SOLD!' : 'UNSOLD'}
+                                </h3>
+
+                                {isMyTeamWinner && (
+                                    <p className="text-lg text-green-100 mb-4">🎊 Your team won this player! 🎊</p>
                                 )}
-                            </div>
-                            <div className="flex gap-3 justify-end">
-                                <button onClick={() => setFinalizeModal(null)} className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300">Close</button>
-                                <button onClick={() => { setFinalizeModal(null); navigate(`/tournament/${tournamentId}/history`); }} className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700">View History</button>
+
+                                {/* Player Name */}
+                                <div className="bg-white bg-opacity-20 rounded-xl p-4 mb-4">
+                                    <p className="text-2xl font-bold">{finalizeModal.player_name}</p>
+                                </div>
+
+                                {isSold && (
+                                    <div className="space-y-2 mb-4">
+                                        <p className="text-xl">
+                                            <span className="opacity-80">Bought by</span>
+                                            <br/>
+                                            <span className="font-bold text-2xl">{finalizeModal.team_name}</span>
+                                        </p>
+                                        <p className="text-3xl font-black">
+                                            ₹{finalizeModal.price_lakhs} L
+                                        </p>
+                                    </div>
+                                )}
+
+                                {!isSold && (
+                                    <p className="text-lg opacity-80 mb-4">No bids were placed for this player</p>
+                                )}
+
+                                <div className="flex gap-3 justify-center mt-4">
+                                    <button 
+                                        onClick={() => setFinalizeModal(null)} 
+                                        className="px-5 py-2 rounded-lg bg-white bg-opacity-20 hover:bg-opacity-30 transition font-semibold"
+                                    >
+                                        Close
+                                    </button>
+                                    <button 
+                                        onClick={() => { setFinalizeModal(null); navigate(`/tournament/${tournamentId}/history`); }} 
+                                        className="px-5 py-2 rounded-lg bg-white text-gray-900 hover:bg-gray-100 transition font-semibold"
+                                    >
+                                        View History
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
+                    );
+                })()}
 
                 {/* No blocking modal here; hover cards are rendered inline near each team */}
                 {/* Status Message */}
