@@ -1,30 +1,28 @@
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 
-// Create transporter for sending emails
-const createTransporter = () => {
-    console.log('Email config:', {
-        service: process.env.EMAIL_SERVICE,
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS ? '***' : 'NOT SET'
-    });
-    
-    return nodemailer.createTransport({
-        service: process.env.EMAIL_SERVICE || 'gmail',
-        auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS
-        }
-    });
+// Initialize Resend client
+const getResend = () => {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+        console.error('RESEND_API_KEY is not set');
+        return null;
+    }
+    return new Resend(apiKey);
 };
+
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'Cricket Auction <onboarding@resend.dev>';
 
 // Send OTP email
 const sendOTPEmail = async (email, otp, name) => {
     try {
-        const transporter = createTransporter();
-        
-        const mailOptions = {
-            from: process.env.EMAIL_USER,
-            to: email,
+        const resend = getResend();
+        if (!resend) {
+            return { success: false, error: 'Email service not configured' };
+        }
+
+        const { data, error } = await resend.emails.send({
+            from: FROM_EMAIL,
+            to: [email],
             subject: 'Cricket Auction - Email Verification',
             html: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -63,11 +61,15 @@ const sendOTPEmail = async (email, otp, name) => {
                     </div>
                 </div>
             `
-        };
+        });
 
-        const result = await transporter.sendMail(mailOptions);
-        console.log('OTP email sent successfully:', result.messageId);
-        return { success: true, messageId: result.messageId };
+        if (error) {
+            console.error('Error sending OTP email:', error);
+            return { success: false, error: error.message };
+        }
+
+        console.log('OTP email sent successfully:', data.id);
+        return { success: true, messageId: data.id };
     } catch (error) {
         console.error('Error sending OTP email:', error);
         return { success: false, error: error.message };
@@ -77,11 +79,14 @@ const sendOTPEmail = async (email, otp, name) => {
 // Send welcome email after successful verification
 const sendWelcomeEmail = async (email, name) => {
     try {
-        const transporter = createTransporter();
-        
-        const mailOptions = {
-            from: process.env.EMAIL_USER,
-            to: email,
+        const resend = getResend();
+        if (!resend) {
+            return { success: false, error: 'Email service not configured' };
+        }
+
+        const { data, error } = await resend.emails.send({
+            from: FROM_EMAIL,
+            to: [email],
             subject: 'Welcome to Cricket Auction!',
             html: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -126,11 +131,15 @@ const sendWelcomeEmail = async (email, name) => {
                     </div>
                 </div>
             `
-        };
+        });
 
-        const result = await transporter.sendMail(mailOptions);
-        console.log('Welcome email sent successfully:', result.messageId);
-        return { success: true, messageId: result.messageId };
+        if (error) {
+            console.error('Error sending welcome email:', error);
+            return { success: false, error: error.message };
+        }
+
+        console.log('Welcome email sent successfully:', data.id);
+        return { success: true, messageId: data.id };
     } catch (error) {
         console.error('Error sending welcome email:', error);
         return { success: false, error: error.message };
