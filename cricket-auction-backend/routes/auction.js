@@ -51,7 +51,17 @@ router.post('/start', authenticateToken, async (req, res) => {
             return res.status(403).json({ error: 'Only the tournament host can start an auction' });
         }
 
-        // Check that all team owners have joined the auction room
+        // Check that all teams have owners AND all owners are connected
+        const allTeams = await pool.query(
+            'SELECT id, team_name FROM teams WHERE tournament_id = $1',
+            [tournament_id]
+        );
+
+        if (allTeams.rows.length === 0) {
+            return res.status(400).json({ error: 'No teams found in this tournament' });
+        }
+
+        // For each team, check if it has an owner
         const teamsWithOwners = await pool.query(
             `SELECT t.id, t.team_name, tm.user_id 
              FROM teams t 
@@ -60,7 +70,20 @@ router.post('/start', authenticateToken, async (req, res) => {
             [tournament_id]
         );
 
-        const totalTeamsWithOwners = teamsWithOwners.rows.length;
+        const teamsWithOwnerIds = new Set(teamsWithOwners.rows.map(r => r.id));
+        const teamsWithoutOwner = allTeams.rows.filter(t => !teamsWithOwnerIds.has(t.id));
+
+        if (teamsWithoutOwner.length > 0) {
+            const names = teamsWithoutOwner.map(t => t.team_name).join(', ');
+            return res.status(400).json({ 
+                error: `Cannot start auction. These teams have no owner yet: ${names}`,
+                missing_teams: teamsWithoutOwner.map(t => ({ team_id: t.id, team_name: t.team_name })),
+                connected: 0,
+                total: allTeams.rows.length
+            });
+        }
+
+        // Now check all owners are connected via socket
         const connectedOwners = io.getConnectedOwners ? io.getConnectedOwners(tournament_id) : [];
         const connectedOwnerUserIds = new Set(connectedOwners.map(o => o.user_id));
 
@@ -71,10 +94,10 @@ router.post('/start', authenticateToken, async (req, res) => {
         if (missingOwners.length > 0) {
             const missingNames = missingOwners.map(o => o.team_name).join(', ');
             return res.status(400).json({ 
-                error: `Cannot start auction. Waiting for team owners to join: ${missingNames}`,
+                error: `Cannot start auction. Waiting for team owners to join the auction room: ${missingNames}`,
                 missing_teams: missingOwners.map(o => ({ team_id: o.id, team_name: o.team_name })),
                 connected: connectedOwners.length,
-                total: totalTeamsWithOwners
+                total: teamsWithOwners.rows.length
             });
         }
 

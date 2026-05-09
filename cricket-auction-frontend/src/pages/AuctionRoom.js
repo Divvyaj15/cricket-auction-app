@@ -49,8 +49,8 @@ const AuctionRoom = () => {
     const isHost = !!(tournament && user && tournament.host_id === user.id);
     const allOwnersReady = allTeams.length > 0 && allTeams.every(team => {
         const hasOwner = team.members && team.members.some(m => m.role === 'owner');
-        if (!hasOwner) return true; // Skip teams without owners
-        return team.members.some(m => m.role === 'owner' && connectedOwners.some(o => o.team_id === team.id));
+        if (!hasOwner) return false; // Team has no owner yet — not ready
+        return connectedOwners.some(o => o.team_id === team.id);
     });
 
 
