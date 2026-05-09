@@ -4,6 +4,10 @@ const http = require('http');
 const socketIo = require('socket.io');
 const dotenv = require('dotenv');
 const path = require('path');
+const dns = require('dns');
+
+// Force IPv4 first to fix Supabase ENETUNREACH on IPv6
+dns.setDefaultResultOrder('ipv4first');
 
 // Load environment variables
 const result = dotenv.config({ path: path.join(__dirname, '.env') });
