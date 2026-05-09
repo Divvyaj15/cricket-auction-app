@@ -265,16 +265,28 @@ router.post('/finalize', authenticateToken, async (req, res) => {
 
         const auction = auctionResult.rows[0];
 
+        // Check if already finalized
+        if (auction.status === 'completed') {
+            await client.query('ROLLBACK');
+            return res.json({ message: 'Auction already finalized' });
+        }
+
         // Verify caller is host of this tournament
         const host = await isHost(pool, req.user.id, auction.tournament_id);
         if (!host) {
             throw new Error('Only the tournament host can finalize auctions');
         }
 
+        // Mark auction as completed first to prevent double finalization
+        await client.query(
+            'UPDATE auction_rounds SET status = $1, ended_at = NOW() WHERE id = $2',
+            ['completed', auction_round_id]
+        );
+
         if (auction.current_bidder_team_id) {
-            // Create purchase record
+            // Create purchase record (ON CONFLICT prevents duplicate)
             await client.query(
-                'INSERT INTO purchases (tournament_id, player_id, team_id, purchase_price) VALUES ($1, $2, $3, $4)',
+                'INSERT INTO purchases (tournament_id, player_id, team_id, purchase_price) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING',
                 [auction.tournament_id, auction.player_id, auction.current_bidder_team_id, auction.current_bid]
             );
 
@@ -333,12 +345,6 @@ router.post('/finalize', authenticateToken, async (req, res) => {
 
             res.json({ message: 'Player went unsold' });
         }
-
-        // Update auction round
-        await pool.query(
-            'UPDATE auction_rounds SET status = $1, ended_at = NOW() WHERE id = $2',
-            ['completed', auction_round_id]
-        );
 
     } catch (error) {
         await client.query('ROLLBACK');
@@ -473,6 +479,86 @@ router.post('/giveup', authenticateToken, async (req, res) => {
             team_name: team.team_name,
             player_name: auction.player_name
         });
+
+        // Check if ALL teams have given up → auto-finalize
+        const totalTeams = await pool.query(
+            'SELECT COUNT(*) as total FROM teams WHERE tournament_id = $1',
+            [auction.tournament_id]
+        );
+        const totalGiveups = await pool.query(
+            'SELECT COUNT(*) as total FROM auction_giveups WHERE auction_round_id = $1',
+            [auction_round_id]
+        );
+
+        const allTeamsCount = parseInt(totalTeams.rows[0].total);
+        const giveupCount = parseInt(totalGiveups.rows[0].total);
+
+        // If all teams gave up OR all teams except the current bidder gave up
+        if (giveupCount >= allTeamsCount - (auction.current_bidder_team_id ? 1 : 0)) {
+            // Auto-finalize the auction
+            const client = await pool.connect();
+            try {
+                await client.query('BEGIN');
+
+                // Mark auction as completed
+                await client.query(
+                    'UPDATE auction_rounds SET status = $1, ended_at = NOW() WHERE id = $2',
+                    ['completed', auction_round_id]
+                );
+
+                if (auction.current_bidder_team_id) {
+                    // Sold to the last bidder
+                    await client.query(
+                        'INSERT INTO purchases (tournament_id, player_id, team_id, purchase_price) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING',
+                        [auction.tournament_id, auction.player_id, auction.current_bidder_team_id, auction.current_bid]
+                    );
+                    await client.query(
+                        'UPDATE teams SET remaining_budget = remaining_budget - $1 WHERE id = $2',
+                        [auction.current_bid, auction.current_bidder_team_id]
+                    );
+                    await client.query(
+                        'UPDATE players SET status = $1 WHERE id = $2',
+                        ['sold', auction.player_id]
+                    );
+
+                    const winnerResult = await client.query(
+                        'SELECT team_name FROM teams WHERE id = $1',
+                        [auction.current_bidder_team_id]
+                    );
+
+                    await client.query('COMMIT');
+
+                    io.to(`tournament_${auction.tournament_id}`).emit('auction_finalized', {
+                        auction_round_id,
+                        player_id: auction.player_id,
+                        player_name: auction.player_name,
+                        winning_team_id: auction.current_bidder_team_id,
+                        winning_team_name: winnerResult.rows[0].team_name,
+                        final_price: auction.current_bid,
+                        status: 'sold'
+                    });
+                } else {
+                    // No bids at all - unsold
+                    await client.query(
+                        'UPDATE players SET status = $1 WHERE id = $2',
+                        ['unsold', auction.player_id]
+                    );
+                    await client.query('COMMIT');
+
+                    io.to(`tournament_${auction.tournament_id}`).emit('auction_finalized', {
+                        auction_round_id,
+                        player_id: auction.player_id,
+                        player_name: auction.player_name,
+                        status: 'unsold'
+                    });
+                }
+            } catch (autoFinalizeErr) {
+                await client.query('ROLLBACK');
+                console.error('Auto-finalize error:', autoFinalizeErr);
+            } finally {
+                client.release();
+            }
+        }
 
         res.json({ message: 'Successfully gave up on this player' });
     } catch (error) {
