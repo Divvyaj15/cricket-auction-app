@@ -59,44 +59,61 @@ const TournamentDetail = () => {
 
 
     const fetchTournamentData = useCallback(async () => {
-        const tournamentData = await tournamentAPI.getById(id);
-        setTournament(tournamentData);
+        try {
+            const tournamentData = await tournamentAPI.getById(id);
+            if (tournamentData.error) {
+                console.error('Tournament fetch error:', tournamentData.error);
+                return;
+            }
+            setTournament(tournamentData);
 
-        // Check if auction has ended based on tournament status
-        if (tournamentData.status === 'completed' || tournamentData.status === 'ended') {
-            setAuctionEnded(true);
-        }
+            // Check if auction has ended based on tournament status
+            if (tournamentData.status === 'completed' || tournamentData.status === 'ended') {
+                setAuctionEnded(true);
+            }
 
-        const teamsData = await teamAPI.getTeamsByTournament(id);
-        setTeams(teamsData);
+            const teamsData = await teamAPI.getTeamsByTournament(id);
+            setTeams(Array.isArray(teamsData) ? teamsData : []);
 
-        // Always fetch my teams to determine if user has joined
-        const myTeamsData = await teamAPI.getMyTeams(id);
-        setMyTeams(myTeamsData || []);
+            // Always fetch my teams to determine if user has joined
+            const myTeamsData = await teamAPI.getMyTeams(id);
+            setMyTeams(Array.isArray(myTeamsData) ? myTeamsData : []);
 
-        const playersData = await playerAPI.getByTournament(id);
-        
-        // For sold players, we need to get their purchase price
-        const playersWithPurchaseInfo = await Promise.all(playersData.map(async (player) => {
-            if (player.status === 'sold') {
+            const playersData = await playerAPI.getByTournament(id);
+            if (!Array.isArray(playersData)) {
+                setPlayers([]);
+                return;
+            }
+            
+            // For sold players, we need to get their purchase price
+            // Fetch all purchases once to avoid redundant API calls
+            const allTeams = Array.isArray(teamsData) ? teamsData : [];
+            const allPurchases = [];
+            for (const team of allTeams) {
                 try {
-                    // Get the team that purchased this player
-                    const teams = await teamAPI.getTeamsByTournament(id);
-                    for (const team of teams) {
-                        const purchases = await auctionAPI.getPurchases(team.id);
-                        const purchase = purchases.find(p => p.player_id === player.id);
-                        if (purchase) {
-                            return { ...player, purchase_price: purchase.purchase_price };
-                        }
+                    const purchases = await auctionAPI.getPurchases(team.id);
+                    if (Array.isArray(purchases)) {
+                        allPurchases.push(...purchases);
                     }
-                } catch (error) {
-                    console.error('Error fetching purchase info for player:', player.id, error);
+                } catch (err) {
+                    console.error('Error fetching purchases for team:', team.id, err);
                 }
             }
-            return player;
-        }));
-        
-        setPlayers(playersWithPurchaseInfo);
+
+            const playersWithPurchaseInfo = playersData.map(player => {
+                if (player.status === 'sold') {
+                    const purchase = allPurchases.find(p => p.player_id === player.id);
+                    if (purchase) {
+                        return { ...player, purchase_price: purchase.purchase_price };
+                    }
+                }
+                return player;
+            });
+            
+            setPlayers(playersWithPurchaseInfo);
+        } catch (error) {
+            console.error('Error loading tournament data:', error);
+        }
     }, [id]);
 
     useEffect(() => {
