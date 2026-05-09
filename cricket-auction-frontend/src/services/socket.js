@@ -76,4 +76,10 @@ export const onAuctionEnded = (callback) => {
     }
 };
 
+export const onOwnerPresenceUpdate = (callback) => {
+    if (socket) {
+        socket.on('owner_presence_update', callback);
+    }
+};
+
 export const getSocket = () => socket;

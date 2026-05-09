@@ -13,6 +13,7 @@ import {
     onAuctionFinalized,
     onTeamGaveUp,
     onAuctionEnded,
+    onOwnerPresenceUpdate,
     getSocket
 } from '../services/socket';
 
@@ -43,8 +44,14 @@ const AuctionRoom = () => {
     const [teamPurchasesMap, setTeamPurchasesMap] = useState({}); // teamId -> players[]
     const [hoverLoadingTeamId, setHoverLoadingTeamId] = useState(null);
     const hoverCloseTimerRef = useRef(null);
+    const [connectedOwners, setConnectedOwners] = useState([]);
 
     const isHost = !!(tournament && user && tournament.host_id === user.id);
+    const allOwnersReady = allTeams.length > 0 && allTeams.every(team => {
+        const hasOwner = team.members && team.members.some(m => m.role === 'owner');
+        if (!hasOwner) return true; // Skip teams without owners
+        return team.members.some(m => m.role === 'owner' && connectedOwners.some(o => o.team_id === team.id));
+    });
 
 
 
@@ -204,6 +211,11 @@ const AuctionRoom = () => {
             setMessage('Auction has ended');
             // brief delay then redirect to summary
             setTimeout(() => navigate(`/tournament/${tournamentId}/summary`), 1000);
+        });
+
+        // Owner presence updates
+        onOwnerPresenceUpdate((data) => {
+            setConnectedOwners(data.connected_owners || []);
         });
     }, [tournamentId, token, fetchTournamentData, navigate]);
 
@@ -413,21 +425,43 @@ const AuctionRoom = () => {
 
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
                 {isHost && (
-                    <div className="bg-gray-800 rounded-lg p-4 mb-6 flex flex-wrap gap-3 items-center justify-between">
-                        <div className="text-sm text-gray-300">Host Controls</div>
-                        <div className="flex gap-3">
-                            <button
-                                onClick={handleDistributeRemaining}
-                                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded"
-                            >
-                                Distribute Remaining Players
-                            </button>
-                            <button
-                                onClick={handleEndAuction}
-                                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded"
-                            >
-                                End Auction
-                            </button>
+                    <div className="bg-gray-800 rounded-lg p-4 mb-6 space-y-3">
+                        <div className="flex flex-wrap gap-3 items-center justify-between">
+                            <div className="text-sm text-gray-300">Host Controls</div>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={handleDistributeRemaining}
+                                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded"
+                                >
+                                    Distribute Remaining Players
+                                </button>
+                                <button
+                                    onClick={handleEndAuction}
+                                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded"
+                                >
+                                    End Auction
+                                </button>
+                            </div>
+                        </div>
+                        {/* Team Owner Presence Panel */}
+                        <div className={`rounded-lg p-3 ${allOwnersReady ? 'bg-green-900 bg-opacity-40' : 'bg-yellow-900 bg-opacity-40'}`}>
+                            <p className={`text-sm font-semibold mb-2 ${allOwnersReady ? 'text-green-300' : 'text-yellow-300'}`}>
+                                {allOwnersReady ? '✅ All team owners are connected' : '⏳ Waiting for team owners to join...'}
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                                {allTeams.map(team => {
+                                    const ownerConnected = connectedOwners.some(o => o.team_id === team.id);
+                                    return (
+                                        <span key={team.id} className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                            ownerConnected 
+                                                ? 'bg-green-600 text-white' 
+                                                : 'bg-gray-600 text-gray-300'
+                                        }`}>
+                                            {ownerConnected ? '🟢' : '🔴'} {team.team_name}
+                                        </span>
+                                    );
+                                })}
+                            </div>
                         </div>
                     </div>
                 )}
@@ -647,17 +681,20 @@ const AuctionRoom = () => {
                                         ) : (
                                             <p className="text-gray-500 mb-6">No players available</p>
                                         )}
+                                        {!allOwnersReady && (
+                                            <p className="text-yellow-400 text-sm mb-2 text-center">⏳ Waiting for all team owners to join before starting...</p>
+                                        )}
                                         <div className="flex gap-3">
                                             <button
                                                 onClick={() => availablePlayers[0] && handleStartAuction(availablePlayers[0])}
-                                                disabled={availablePlayers.length === 0}
+                                                disabled={availablePlayers.length === 0 || !allOwnersReady}
                                                 className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg"
                                             >
                                                 Start Next Player
                                             </button>
                                             <button
                                                 onClick={handleStartRandom}
-                                                disabled={availablePlayers.length === 0}
+                                                disabled={availablePlayers.length === 0 || !allOwnersReady}
                                                 className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg"
                                             >
                                                 Start Random

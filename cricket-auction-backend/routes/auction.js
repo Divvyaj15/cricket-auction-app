@@ -50,6 +50,34 @@ router.post('/start', authenticateToken, async (req, res) => {
         if (!host) {
             return res.status(403).json({ error: 'Only the tournament host can start an auction' });
         }
+
+        // Check that all team owners have joined the auction room
+        const teamsWithOwners = await pool.query(
+            `SELECT t.id, t.team_name, tm.user_id 
+             FROM teams t 
+             JOIN team_members tm ON t.id = tm.team_id 
+             WHERE t.tournament_id = $1 AND tm.member_role = 'owner'`,
+            [tournament_id]
+        );
+
+        const totalTeamsWithOwners = teamsWithOwners.rows.length;
+        const connectedOwners = io.getConnectedOwners ? io.getConnectedOwners(tournament_id) : [];
+        const connectedOwnerUserIds = new Set(connectedOwners.map(o => o.user_id));
+
+        const missingOwners = teamsWithOwners.rows.filter(
+            row => !connectedOwnerUserIds.has(row.user_id)
+        );
+
+        if (missingOwners.length > 0) {
+            const missingNames = missingOwners.map(o => o.team_name).join(', ');
+            return res.status(400).json({ 
+                error: `Cannot start auction. Waiting for team owners to join: ${missingNames}`,
+                missing_teams: missingOwners.map(o => ({ team_id: o.id, team_name: o.team_name })),
+                connected: connectedOwners.length,
+                total: totalTeamsWithOwners
+            });
+        }
+
         // Check if player exists and is available
         const playerResult = await pool.query(
             'SELECT * FROM players WHERE id = $1 AND tournament_id = $2 AND status = $3',
