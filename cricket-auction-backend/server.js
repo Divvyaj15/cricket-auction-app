@@ -29,7 +29,13 @@ const app = express();
 const server = http.createServer(app); 
 const io = socketIo(server, {
     cors: { 
-        origin: process.env.FRONTEND_URL || 'http://localhost:3000', 
+        origin: function(origin, callback) {
+            if (!origin) return callback(null, true);
+            if (origin.endsWith('.vercel.app') || origin.includes('localhost')) {
+                return callback(null, true);
+            }
+            return callback(null, true);
+        },
         credentials: true 
     }
 });
@@ -49,7 +55,27 @@ const pool = new Pool(
           : false,
       }
 );
-app.use(cors());
+const allowedOrigins = process.env.FRONTEND_URL 
+    ? [process.env.FRONTEND_URL, 'http://localhost:3000']
+    : ['http://localhost:3000'];
+
+app.use(cors({
+    origin: function(origin, callback) {
+        // Allow requests with no origin (mobile apps, curl, etc.)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.some(allowed => origin.startsWith(allowed) || allowed === origin)) {
+            return callback(null, true);
+        }
+        // Also allow any vercel.app subdomain for preview deployments
+        if (origin.endsWith('.vercel.app')) {
+            return callback(null, true);
+        }
+        return callback(null, true); // Allow all for now during deployment
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 
 // Make pool and io available to routes
