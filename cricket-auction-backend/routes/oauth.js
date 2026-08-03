@@ -10,73 +10,37 @@ const router = express.Router();
 router.use(express.urlencoded({ extended: true }));
 
 // ---------------------------------------------------------------------------
-// In-memory stores (single-use, short-lived)
+// In-memory authorization code store (single-use, short-lived)
 // ---------------------------------------------------------------------------
-/** @type {Map<string, object>} authorization codes awaiting token exchange */
 const authCodes = new Map();
-/** @type {Map<string, object>} pending login sessions (avoids mangling PKCE params in the HTML form) */
-const pendingLogins = new Map();
-
 const AUTH_CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
-const PENDING_LOGIN_TTL_MS = 10 * 60 * 1000;
 const ACCESS_TOKEN_EXPIRES_IN = 7 * 24 * 60 * 60; // 7 days (matches login JWT)
 
-function cleanupExpired() {
+function cleanupExpiredCodes() {
     const now = Date.now();
     for (const [code, data] of authCodes.entries()) {
-        if (data.expiresAt <= now || data.used) {
+        if (data.expiresAt <= now) {
             authCodes.delete(code);
         }
     }
-    for (const [id, data] of pendingLogins.entries()) {
-        if (data.expiresAt <= now) {
-            pendingLogins.delete(id);
-        }
-    }
 }
 
-function generateRandomToken() {
+function generateAuthCode() {
     return crypto.randomBytes(32).toString('base64url');
 }
 
-// ---------------------------------------------------------------------------
-// PKCE helpers (RFC 7636)
-// code_challenge = BASE64URL(SHA256(ASCII(code_verifier)))
-// ---------------------------------------------------------------------------
-
 /**
- * Base64url encode a Buffer: no padding, + → -, / → _
+ * Compute S256 code_challenge using Node's built-in base64url digest.
+ * Must match: crypto.createHash('sha256').update(code_verifier).digest('base64url')
  */
-function base64UrlEncode(buffer) {
-    return buffer
-        .toString('base64')
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/g, '');
+function computeS256Challenge(code_verifier) {
+    return crypto.createHash('sha256').update(code_verifier).digest('base64url');
 }
 
-/**
- * Normalize a challenge string for comparison (trim + force base64url form).
- */
-function normalizeBase64Url(value) {
-    return String(value || '')
-        .trim()
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/g, '')
-        .replace(/\s+/g, ''); // drop any accidental whitespace
-}
-
-/**
- * Recompute S256 code_challenge from code_verifier.
- */
-function computeS256Challenge(codeVerifier) {
-    // RFC 7636: SHA256 over ASCII code_verifier, then base64url
-    const hash = crypto
-        .createHash('sha256')
-        .update(String(codeVerifier), 'ascii')
-        .digest();
-    return base64UrlEncode(hash);
+function verifyPkce(codeVerifier, codeChallenge, method) {
+    if (method !== 'S256') return false;
+    const hash = computeS256Challenge(codeVerifier);
+    return hash === codeChallenge;
 }
 
 function escapeHtml(str) {
@@ -89,10 +53,18 @@ function escapeHtml(str) {
 }
 
 /**
- * Simple HTML login page. Only carries a short-lived login_session id so
- * code_challenge is never re-encoded through the HTML form body.
+ * Simple HTML login page for the authorization endpoint.
+ * OAuth params are carried as hidden fields so they survive form submit.
  */
-function renderLoginForm({ login_session, error }) {
+function renderLoginForm({
+    client_id,
+    redirect_uri,
+    state,
+    code_challenge,
+    code_challenge_method,
+    scope,
+    error,
+}) {
     const errorHtml = error
         ? `<p class="error">${escapeHtml(error)}</p>`
         : '';
@@ -102,7 +74,7 @@ function renderLoginForm({ login_session, error }) {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Sign in — Cricket Auction</title>
+  <title>Sign in ΓÇö Cricket Auction</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -168,7 +140,13 @@ function renderLoginForm({ login_session, error }) {
     <p class="sub">Sign in to authorize this application</p>
     ${errorHtml}
     <form method="POST" action="/oauth/authorize">
-      <input type="hidden" name="login_session" value="${escapeHtml(login_session)}" />
+      <input type="hidden" name="response_type" value="code" />
+      <input type="hidden" name="client_id" value="${escapeHtml(client_id)}" />
+      <input type="hidden" name="redirect_uri" value="${escapeHtml(redirect_uri)}" />
+      <input type="hidden" name="state" value="${escapeHtml(state)}" />
+      <input type="hidden" name="code_challenge" value="${escapeHtml(code_challenge)}" />
+      <input type="hidden" name="code_challenge_method" value="${escapeHtml(code_challenge_method || 'S256')}" />
+      <input type="hidden" name="scope" value="${escapeHtml(scope)}" />
 
       <label for="email">Email</label>
       <input id="email" type="email" name="email" required autocomplete="username" />
@@ -184,20 +162,19 @@ function renderLoginForm({ login_session, error }) {
 }
 
 /**
- * Validate OAuth authorize params (GET query).
+ * Validate OAuth authorize params (shared by GET and POST).
  * Returns { ok: true, params } or { ok: false, status, body }.
  */
 function validateAuthorizeParams(source) {
-    const response_type = source.response_type;
-    const client_id = source.client_id;
-    const redirect_uri = source.redirect_uri;
-    // Preserve challenge exactly as sent (only trim outer whitespace)
-    const code_challenge = source.code_challenge
-        ? String(source.code_challenge).trim()
-        : '';
-    const code_challenge_method = source.code_challenge_method || 'S256';
-    const state = source.state || '';
-    const scope = source.scope || '';
+    const {
+        response_type,
+        client_id,
+        redirect_uri,
+        code_challenge,
+        code_challenge_method = 'S256',
+        state,
+        scope,
+    } = source;
 
     if (response_type !== 'code') {
         return {
@@ -275,8 +252,8 @@ function validateAuthorizeParams(source) {
             redirect_uri,
             code_challenge,
             code_challenge_method,
-            state,
-            scope,
+            state: state || '',
+            scope: scope || '',
         },
     };
 }
@@ -284,8 +261,12 @@ function validateAuthorizeParams(source) {
 /**
  * GET /oauth/authorize
  *
- * Validates OAuth params, stores them in a short-lived login session
- * (so code_challenge is never passed through the HTML form), shows login form.
+ * OAuth 2.1 Authorization Code + PKCE.
+ * Shows an HTML login form. After successful login (POST), redirects with code.
+ *
+ * Query params:
+ *   response_type, client_id, redirect_uri, state,
+ *   code_challenge, code_challenge_method
  */
 router.get('/authorize', (req, res) => {
     const result = validateAuthorizeParams(req.query);
@@ -293,52 +274,35 @@ router.get('/authorize', (req, res) => {
         return res.status(result.status).json(result.body);
     }
 
-    cleanupExpired();
-
-    const loginSession = generateRandomToken();
-    pendingLogins.set(loginSession, {
-        ...result.params,
-        expiresAt: Date.now() + PENDING_LOGIN_TTL_MS,
-    });
-
-    console.log('[oauth/authorize GET] stored login session PKCE challenge:', result.params.code_challenge);
-
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.send(renderLoginForm({ login_session: loginSession }));
+    return res.send(renderLoginForm(result.params));
 });
 
 /**
  * POST /oauth/authorize
  *
- * Login form submit → verify credentials → issue one-time auth code → redirect.
+ * Handles login form submit: verify email/password against users table
+ * (same rules as /api/auth/login), then issue auth code and redirect.
  */
 router.post('/authorize', async (req, res) => {
-    cleanupExpired();
+    const result = validateAuthorizeParams(req.body);
+    if (!result.ok) {
+        return res.status(result.status).json(result.body);
+    }
 
-    const { login_session, email, password } = req.body || {};
+    const params = result.params;
+    const { email, password } = req.body;
     const pool = req.app.get('db');
 
-    const pending = login_session ? pendingLogins.get(login_session) : null;
-
-    const sendFormError = (message, sessionId) => {
+    const sendFormError = (message) => {
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        // Keep the same session so user can retry without losing OAuth params
         return res.status(401).send(
-            renderLoginForm({
-                login_session: sessionId || login_session || '',
-                error: message,
-            })
+            renderLoginForm({ ...params, error: message })
         );
     };
 
-    if (!pending || pending.expiresAt <= Date.now()) {
-        return res.status(400).send(
-            '<!DOCTYPE html><html><body><p>Authorization session expired. Please restart the OAuth flow.</p></body></html>'
-        );
-    }
-
     if (!email || !password) {
-        return sendFormError('Email and password are required', login_session);
+        return sendFormError('Email and password are required');
     }
 
     try {
@@ -348,61 +312,61 @@ router.post('/authorize', async (req, res) => {
         );
 
         if (userResult.rows.length === 0) {
-            return sendFormError('Invalid email or password', login_session);
+            return sendFormError('Invalid email or password');
         }
 
         const user = userResult.rows[0];
         const validPassword = await bcrypt.compare(password, user.password_hash);
 
         if (!validPassword) {
-            return sendFormError('Invalid email or password', login_session);
+            return sendFormError('Invalid email or password');
         }
 
         if (!user.email_verified) {
             return sendFormError(
-                'Please verify your email before signing in. Check your inbox for a verification code.',
-                login_session
+                'Please verify your email before signing in. Check your inbox for a verification code.'
             );
         }
 
-        // Consume login session (one successful login per authorize attempt)
-        pendingLogins.delete(login_session);
+        cleanupExpiredCodes();
 
-        const code = generateRandomToken();
-        const record = {
-            code,
-            codeChallenge: pending.code_challenge,
-            codeChallengeMethod: pending.code_challenge_method,
-            redirectUri: pending.redirect_uri,
-            clientId: pending.client_id,
+        const code = generateAuthCode();
+        authCodes.set(code, {
             userId: user.id,
-            scope: pending.scope || '',
+            clientId: params.client_id,
+            redirectUri: params.redirect_uri,
+            codeChallenge: params.code_challenge,
+            codeChallengeMethod: params.code_challenge_method,
+            scope: params.scope,
             expiresAt: Date.now() + AUTH_CODE_TTL_MS,
-            used: false,
-        };
+        });
 
-        authCodes.set(code, record);
-
-        console.log('[oauth/authorize POST] issued auth code; stored challenge:', record.codeChallenge);
-        console.log('[oauth/authorize POST] method:', record.codeChallengeMethod, 'userId:', record.userId);
-
-        const redirectUrl = new URL(pending.redirect_uri);
+        const redirectUrl = new URL(params.redirect_uri);
         redirectUrl.searchParams.set('code', code);
-        if (pending.state) {
-            redirectUrl.searchParams.set('state', pending.state);
+        if (params.state) {
+            redirectUrl.searchParams.set('state', params.state);
         }
 
         return res.redirect(redirectUrl.toString());
     } catch (error) {
         console.error('OAuth authorize login error:', error);
-        return sendFormError('Something went wrong. Please try again.', login_session);
+        return sendFormError('Something went wrong. Please try again.');
     }
 });
 
 /**
  * POST /oauth/token
  *
- * Exchange authorization code + code_verifier for a JWT access token.
+ * Exchange an authorization code + code_verifier for an access token.
+ * The access_token is a normal JWT accepted by existing APIs
+ * (same shape as /api/auth/login: { id }, 7d expiry).
+ *
+ * Body (form or JSON):
+ *   grant_type     must be "authorization_code"
+ *   code           required
+ *   redirect_uri   required (must match authorize)
+ *   client_id      required (must match authorize)
+ *   code_verifier  required (PKCE)
  */
 router.post('/token', (req, res) => {
     const {
@@ -428,7 +392,7 @@ router.post('/token', (req, res) => {
         });
     }
 
-    cleanupExpired();
+    cleanupExpiredCodes();
 
     const stored = authCodes.get(code);
     if (!stored) {
@@ -438,18 +402,10 @@ router.post('/token', (req, res) => {
         });
     }
 
-    // Not already used
-    if (stored.used) {
-        authCodes.delete(code);
-        return res.status(400).json({
-            error: 'invalid_grant',
-            error_description: 'Authorization code has already been used',
-        });
-    }
+    // Single-use code
+    authCodes.delete(code);
 
-    // Not expired
     if (stored.expiresAt <= Date.now()) {
-        authCodes.delete(code);
         return res.status(400).json({
             error: 'invalid_grant',
             error_description: 'Authorization code has expired',
@@ -470,34 +426,25 @@ router.post('/token', (req, res) => {
         });
     }
 
-    // --- PKCE S256 verification ---
-    const verifier = String(code_verifier).trim();
-    const computedChallenge = computeS256Challenge(verifier);
-    const storedChallenge = stored.codeChallenge;
+    // --- PKCE S256 verification (Node digest('base64url')) ---
+    const computedChallenge = computeS256Challenge(code_verifier);
 
     // TEMP debug logs
-    console.log('[oauth/token] Stored challenge :', storedChallenge);
+    console.log('[oauth/token] Stored challenge :', stored.codeChallenge);
     console.log('[oauth/token] Computed challenge:', computedChallenge);
-    console.log('[oauth/token] Verifier length   :', verifier.length);
+    console.log('[oauth/token] code_verifier     :', code_verifier);
     console.log('[oauth/token] Method            :', stored.codeChallengeMethod);
 
-    const storedNorm = normalizeBase64Url(storedChallenge);
-    const computedNorm = normalizeBase64Url(computedChallenge);
-
-    if (stored.codeChallengeMethod !== 'S256' || storedNorm !== computedNorm) {
-        console.log('[oauth/token] PKCE mismatch (normalized):', {
-            storedNorm,
-            computedNorm,
-        });
+    if (
+        stored.codeChallengeMethod !== 'S256' ||
+        computedChallenge !== stored.codeChallenge
+    ) {
+        console.log('[oauth/token] PKCE mismatch');
         return res.status(400).json({
             error: 'invalid_grant',
             error_description: 'Invalid code_verifier (PKCE verification failed)',
         });
     }
-
-    // Mark used only after successful PKCE
-    stored.used = true;
-    authCodes.delete(code);
 
     // Same JWT format as routes/auth.js login
     const accessToken = jwt.sign({ id: stored.userId }, JWT_SECRET, {
