@@ -19,7 +19,7 @@ const ACCESS_TOKEN_EXPIRES_IN = 7 * 24 * 60 * 60; // 7 days (matches login JWT)
 function cleanupExpiredCodes() {
     const now = Date.now();
     for (const [code, data] of authCodes.entries()) {
-        if (data.expiresAt <= now) {
+        if (data.expiresAt <= now || data.used) {
             authCodes.delete(code);
         }
     }
@@ -170,7 +170,9 @@ function validateAuthorizeParams(source) {
     const code_challenge = source.code_challenge
         ? String(source.code_challenge).trim()
         : '';
-    const code_challenge_method = source.code_challenge_method || 'S256';
+    const code_challenge_method = String(
+        source.code_challenge_method || 'S256'
+    ).trim();
     const state = source.state || '';
     const scope = source.scope || '';
 
@@ -339,16 +341,15 @@ router.post('/authorize', async (req, res) => {
             clientId: params.client_id,
             redirectUri: params.redirect_uri,
             codeChallenge: storedChallenge,
-            codeChallengeMethod: params.code_challenge_method,
+            // Normalize method so token compare never fails on whitespace/case
+            codeChallengeMethod: String(params.code_challenge_method || 'S256').trim(),
             scope: params.scope,
             expiresAt: Date.now() + AUTH_CODE_TTL_MS,
+            used: false,
         });
 
         console.log('[oauth/authorize] Stored challenge (from client):', storedChallenge);
-        console.log(
-            '[oauth/authorize] Hash helper ready (generateCodeChallenge):',
-            typeof generateCodeChallenge === 'function'
-        );
+        console.log('[oauth/authorize] Stored method:', String(params.code_challenge_method || 'S256').trim());
 
         const redirectUrl = new URL(params.redirect_uri);
         redirectUrl.searchParams.set('code', code);
@@ -404,6 +405,12 @@ router.post('/token', (req, res) => {
     cleanupExpiredCodes();
 
     const stored = authCodes.get(code);
+    console.log('[oauth/token] Auth code found:', !!stored);
+    if (stored) {
+        console.log('[oauth/token] Auth code already used:', !!stored.used);
+        console.log('[oauth/token] Auth code expired:', stored.expiresAt <= Date.now());
+    }
+
     if (!stored) {
         return res.status(400).json({
             error: 'invalid_grant',
@@ -411,10 +418,15 @@ router.post('/token', (req, res) => {
         });
     }
 
-    // Single-use code
-    authCodes.delete(code);
+    if (stored.used) {
+        return res.status(400).json({
+            error: 'invalid_grant',
+            error_description: 'Authorization code has already been used',
+        });
+    }
 
     if (stored.expiresAt <= Date.now()) {
+        authCodes.delete(code);
         return res.status(400).json({
             error: 'invalid_grant',
             error_description: 'Authorization code has expired',
@@ -436,21 +448,57 @@ router.post('/token', (req, res) => {
     }
 
     // --- PKCE S256 verification (shared generateCodeChallenge) ---
-    const storedChallenge = stored.codeChallenge;
+    // Do NOT consume the auth code until PKCE succeeds.
+    const storedChallenge = String(stored.codeChallenge ?? '').trim();
+    const computedChallenge = generateCodeChallenge(String(code_verifier).trim());
+    const storedMethod = String(stored.codeChallengeMethod ?? '').trim();
 
     console.log('Verifier received :', code_verifier);
     console.log('Stored challenge  :', storedChallenge);
-    console.log('Computed challenge:', generateCodeChallenge(code_verifier));
+    console.log('Computed challenge:', computedChallenge);
+    console.log('[oauth/token] Stored method   :', JSON.stringify(storedMethod));
+    console.log('[oauth/token] Challenge lengths:', {
+        stored: storedChallenge.length,
+        computed: computedChallenge.length,
+    });
+    console.log('[oauth/token] Strict equal    :', computedChallenge === storedChallenge);
+    console.log(
+        '[oauth/token] Trimmed equal   :',
+        computedChallenge.trim() === storedChallenge.trim()
+    );
+    console.log('[oauth/token] Method is S256  :', storedMethod === 'S256');
+    console.log(
+        '[oauth/token] Stored challenge JSON:',
+        JSON.stringify(storedChallenge)
+    );
+    console.log(
+        '[oauth/token] Computed challenge JSON:',
+        JSON.stringify(computedChallenge)
+    );
 
-    if (
-        stored.codeChallengeMethod !== 'S256' ||
-        generateCodeChallenge(code_verifier) !== storedChallenge
-    ) {
+    // Method check is SEPARATE from challenge comparison so a bad method
+    // is not reported as "Invalid code_verifier".
+    if (storedMethod !== 'S256') {
+        console.log('[oauth/token] FAIL: code_challenge_method is not S256');
+        return res.status(400).json({
+            error: 'invalid_grant',
+            error_description: `Unsupported code_challenge_method: ${storedMethod || '(empty)'}`,
+        });
+    }
+
+    if (computedChallenge !== storedChallenge) {
+        console.log('[oauth/token] FAIL: challenge mismatch after trim');
         return res.status(400).json({
             error: 'invalid_grant',
             error_description: 'Invalid code_verifier (PKCE verification failed)',
         });
     }
+
+    console.log('[oauth/token] PKCE verification succeeded');
+
+    // Consume auth code only after successful PKCE
+    stored.used = true;
+    authCodes.delete(code);
 
     // Same JWT format as routes/auth.js login
     const accessToken = jwt.sign({ id: stored.userId }, JWT_SECRET, {
