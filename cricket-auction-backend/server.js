@@ -26,57 +26,58 @@ if (result.error) {
 const { Pool } = require('pg');
 
 const app = express();
-const server = http.createServer(app); 
+const server = http.createServer(app);
 const io = socketIo(server, {
-    cors: { 
-        origin: function(origin, callback) {
+    cors: {
+        origin: function (origin, callback) {
             if (!origin) return callback(null, true);
             if (origin.endsWith('.vercel.app') || origin.includes('localhost')) {
                 return callback(null, true);
             }
             return callback(null, true);
         },
-        credentials: true 
+        credentials: true
     }
 });
 
 // Database connection
 const pool = new Pool(
-  process.env.DATABASE_URL
-    ? { connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } }
-    : {
-        user: process.env.PGUSER || 'postgres',
-        host: process.env.PGHOST || 'localhost',
-        database: process.env.PGDATABASE || 'cricket_auction',
-        password: process.env.PGPASSWORD,
-        port: Number(process.env.PGPORT) || 5432,
-        ssl: process.env.PGHOST && process.env.PGHOST !== 'localhost'
-          ? { rejectUnauthorized: false }
-          : false,
-      }
+    process.env.DATABASE_URL
+        ? { connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } }
+        : {
+            user: process.env.PGUSER || 'postgres',
+            host: process.env.PGHOST || 'localhost',
+            database: process.env.PGDATABASE || 'cricket_auction',
+            password: process.env.PGPASSWORD,
+            port: Number(process.env.PGPORT) || 5432,
+            ssl: process.env.PGHOST && process.env.PGHOST !== 'localhost'
+                ? { rejectUnauthorized: false }
+                : false,
+        }
 );
-const allowedOrigins = process.env.FRONTEND_URL 
+
+const allowedOrigins = process.env.FRONTEND_URL
     ? [process.env.FRONTEND_URL, 'http://localhost:3000']
     : ['http://localhost:3000'];
 
 app.use(cors({
-    origin: function(origin, callback) {
-        // Allow requests with no origin (mobile apps, curl, etc.)
+    origin: function (origin, callback) {
         if (!origin) return callback(null, true);
         if (allowedOrigins.some(allowed => origin.startsWith(allowed) || allowed === origin)) {
             return callback(null, true);
         }
-        // Also allow any vercel.app subdomain for preview deployments
         if (origin.endsWith('.vercel.app')) {
             return callback(null, true);
         }
-        return callback(null, true); // Allow all for now during deployment
+        return callback(null, true);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // needed for OAuth form
 
 // Make pool and io available to routes
 app.set('db', pool);
@@ -88,6 +89,7 @@ const tournamentRoutes = require('./routes/tournaments');
 const teamRoutes = require('./routes/teams');
 const playerRoutes = require('./routes/players');
 const auctionRoutes = require('./routes/auction');
+const oauthRoutes = require('./routes/oauth');          // ← added
 
 // Use routes
 app.use('/api/auth', authRoutes);
@@ -95,6 +97,7 @@ app.use('/api/tournaments', tournamentRoutes);
 app.use('/api/teams', teamRoutes);
 app.use('/api/players', playerRoutes);
 app.use('/api/auction', auctionRoutes);
+app.use('/oauth', oauthRoutes);                         // ← added
 
 // Socket.io
 require('./socket/auctionSocket')(io, pool);
