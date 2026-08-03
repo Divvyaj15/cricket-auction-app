@@ -1,6 +1,7 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
@@ -16,6 +17,7 @@ function App() {
         <AuthProvider>
             <Router>
                 <Routes>
+                    <Route path="/" element={<Home />} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
                     <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
@@ -24,7 +26,6 @@ function App() {
                     <Route path="/team/:teamId/squad" element={<PrivateRoute><TeamSquad /></PrivateRoute>} />
                     <Route path="/tournament/:tournamentId/history" element={<PrivateRoute><AuctionHistory /></PrivateRoute>} />
                     <Route path="/tournament/:tournamentId/summary" element={<PrivateRoute><AuctionSummary /></PrivateRoute>} />
-                    <Route path="/" element={<Navigate to="/dashboard" />} />
                 </Routes>
             </Router>
         </AuthProvider>

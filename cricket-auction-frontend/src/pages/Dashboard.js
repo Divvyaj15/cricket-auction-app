@@ -176,7 +176,10 @@ const Dashboard = () => {
                                 <p className="text-xs text-gray-500">{user?.email}</p>
                             </div>
                             <button
-                                onClick={logout}
+                                onClick={() => {
+                                    logout();
+                                    navigate('/');
+                                }}
                                 className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition"
                             >
                                 Logout
