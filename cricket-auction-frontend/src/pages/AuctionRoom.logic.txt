@@ -1,0 +1,375 @@
+// src/pages/AuctionRoom.js
+// ============================================
+import React, { useState, useEffect, useContext, useRef, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { AuthContext } from '../context/AuthContext';
+import { tournamentAPI, teamAPI, playerAPI, auctionAPI } from '../services/api';
+import {
+    connectSocket,
+    disconnectSocket,
+    joinTournament,
+    onAuctionStarted,
+    onNewBid,
+    onAuctionFinalized,
+    onTeamGaveUp,
+    onAuctionEnded,
+    getSocket
+} from '../services/socket';
+
+const AuctionRoom = () => {
+    const { tournamentId } = useParams();
+    const { user, token } = useContext(AuthContext);
+    const navigate = useNavigate();
+
+    const [tournament, setTournament] = useState(null);
+    const [myTeams, setMyTeams] = useState([]);
+    const [selectedTeam, setSelectedTeam] = useState(null);
+    const [allTeams, setAllTeams] = useState([]);
+    
+    const [availablePlayers, setAvailablePlayers] = useState([]);
+    const [currentAuction, setCurrentAuction] = useState(null);
+    const [currentPlayer, setCurrentPlayer] = useState(null);
+    const [bidHistory, setBidHistory] = useState([]);
+    
+    const [bidAmount, setBidAmount] = useState(0);
+    const [canBid, setCanBid] = useState(false);
+    const [message, setMessage] = useState('');
+    const [secondsRemaining, setSecondsRemaining] = useState(null);
+    const [finalizeModal, setFinalizeModal] = useState(null);
+    const [hasGivenUp, setHasGivenUp] = useState(false);
+    const [giveUpTeams, setGiveUpTeams] = useState([]);
+    // Hover Squad Panel state (no blocking modal)
+    const [hoveredTeamId, setHoveredTeamId] = useState(null);
+    const [teamPurchasesMap, setTeamPurchasesMap] = useState({}); // teamId -> players[]
+    const [hoverLoadingTeamId, setHoverLoadingTeamId] = useState(null);
+    const hoverCloseTimerRef = useRef(null);
+
+    const isHost = !!(tournament && user && tournament.host_id === user.id);
+    // Check if every team has at least one owner assigned
+    const allOwnersReady = allTeams.length > 0 && allTeams.every(team => {
+        return team.members && team.members.some(m => m.role === 'owner');
+    });
+
+
+
+    const fetchTournamentData = useCallback(async () => {
+        // Fetch all teams
+        const teamsData = await teamAPI.getTeamsByTournament(tournamentId);
+        setAllTeams(teamsData);
+
+        // Fetch available players and sort by role then name
+        const roleOrder = { 'batsman': 0, 'bowler': 1, 'all-rounder': 2, 'wicket-keeper': 3 };
+        const playersData = await playerAPI.getByTournament(tournamentId, 'available');
+        const sortedPlayers = (playersData || []).slice().sort((a,b) => {
+            const ra = roleOrder[(a.role || '').toLowerCase()] ?? 99;
+            const rb = roleOrder[(b.role || '').toLowerCase()] ?? 99;
+            if (ra !== rb) return ra - rb;
+            return (a.name || '').localeCompare(b.name || '');
+        });
+        setAvailablePlayers(sortedPlayers);
+
+        // Always fetch my teams; bidding controls will only show for non-hosts
+        const myTeamsData = await teamAPI.getMyTeams(tournamentId);
+        setMyTeams(myTeamsData || []);
+        if (myTeamsData && myTeamsData.length > 0) {
+            setSelectedTeam(myTeamsData[0]);
+            const bidPermission = await teamAPI.canBid(myTeamsData[0].id);
+            setCanBid(!!bidPermission?.can_bid);
+        }
+
+        // Check for active auction
+        const activeAuction = await auctionAPI.getActiveAuction(tournamentId);
+        if (activeAuction) {
+            setCurrentAuction(activeAuction);
+            setCurrentPlayer({
+                id: activeAuction.player_id,
+                name: activeAuction.player_name,
+                role: activeAuction.role,
+                base_price: activeAuction.base_price
+            });
+            setBidAmount(activeAuction.current_bid + 50000);
+            
+            // Fetch bid history
+            const history = await auctionAPI.getBidHistory(activeAuction.id);
+            setBidHistory(history);
+
+            // Check if current user's team has given up
+            if (myTeamsData && myTeamsData.length > 0) {
+                const giveUps = await auctionAPI.getGiveUps(activeAuction.id);
+                const giveUpsArray = Array.isArray(giveUps) ? giveUps : [];
+                setGiveUpTeams(giveUpsArray);
+                const userTeamGivenUp = giveUpsArray.some(giveUp => 
+                    myTeamsData.some(team => team.id === giveUp.team_id)
+                );
+                setHasGivenUp(userTeamGivenUp || false);
+            }
+        }
+    }, [tournamentId]);
+
+    const initializeAuctionRoom = useCallback(async () => {
+        // Fetch tournament data
+        const tournamentData = await tournamentAPI.getById(tournamentId);
+        setTournament(tournamentData);
+
+        // Initial data fetch
+        await fetchTournamentData();
+
+        // Setup Socket.io
+        connectSocket(token);
+        joinTournament(tournamentId);
+
+        // Listen for real-time events
+        onAuctionStarted((data) => {
+            setCurrentAuction(data.auction_round);
+            setCurrentPlayer(data.player);
+            setBidAmount(data.player.base_price + 50000);
+            setBidHistory([]);
+            setMessage(`Auction started for ${data.player.name}`);
+            setHasGivenUp(false);
+            setGiveUpTeams([]);
+            
+            // Remove player from available list
+            setAvailablePlayers(prev => prev.filter(p => p.id !== data.player.id));
+        });
+
+        onNewBid((data) => {
+            setCurrentAuction(prev => ({
+                ...prev,
+                current_bid: data.bid_amount,
+                current_bidder_name: data.team_name
+            }));
+            setBidAmount(data.bid_amount + 50000);
+            
+            // Add to bid history
+            setBidHistory(prev => [{
+                team_name: data.team_name,
+                bidder_name: data.bidder_name,
+                bid_amount: data.bid_amount,
+                created_at: new Date()
+            }, ...prev]);
+            
+            setMessage(`${data.team_name} bid ₹${(data.bid_amount / 100000).toFixed(2)} L`);
+            
+            // Auto-refresh teams budget
+            teamAPI.getTeamsByTournament(tournamentId).then(setAllTeams);
+
+            // Stop local countdown if running (backend also notifies with null)
+            setSecondsRemaining(null);
+        });
+
+        onAuctionFinalized((data) => {
+            if (data.status === 'sold') {
+                setMessage(`${data.player_name} sold to ${data.winning_team_name} for ₹${(data.final_price / 100000).toFixed(2)} L`);
+                setFinalizeModal({
+                    status: 'sold',
+                    player_name: data.player_name,
+                    team_name: data.winning_team_name,
+                    winning_team_id: data.winning_team_id,
+                    price_lakhs: (data.final_price / 100000).toFixed(2)
+                });
+            } else {
+                setMessage(`${data.player_name} went unsold`);
+                setFinalizeModal({
+                    status: 'unsold',
+                    player_name: data.player_name
+                });
+            }
+            
+            // Auto-refresh everything after 4 seconds
+            setTimeout(() => {
+                setCurrentAuction(null);
+                setCurrentPlayer(null);
+                setBidHistory([]);
+                setMessage('');
+                setSecondsRemaining(null);
+                setFinalizeModal(null);
+                
+                // Refresh all data
+                fetchTournamentData();
+            }, 4000);
+        });
+
+        // Countdown updates
+        getSocket()?.on('countdown', (payload) => {
+            setSecondsRemaining(payload?.seconds_remaining ?? null);
+        });
+
+        // Team gave up updates
+        onTeamGaveUp((data) => {
+            setGiveUpTeams(prev => [...prev, {
+                team_id: data.team_id,
+                team_name: data.team_name,
+                created_at: new Date()
+            }]);
+            setMessage(`${data.team_name} gave up on ${data.player_name}`);
+        });
+
+        // Auction ended globally
+        onAuctionEnded(() => {
+            setMessage('Auction has ended');
+            // brief delay then redirect to summary
+            setTimeout(() => navigate(`/tournament/${tournamentId}/summary`), 1000);
+        });
+    }, [tournamentId, token, fetchTournamentData, navigate]);
+
+    useEffect(() => {
+        initializeAuctionRoom();
+        
+        return () => {
+            disconnectSocket();
+        };
+    }, [initializeAuctionRoom]);
+
+    const handleStartAuction = async (player) => {
+        try {
+            const data = await auctionAPI.start(tournamentId, player.id);
+            if (data.error) {
+                alert(data.error);
+            }
+        } catch (error) {
+            alert('Failed to start auction');
+        }
+    };
+
+    const handleStartRandom = async () => {
+        if (!availablePlayers || availablePlayers.length === 0) {
+            alert('No available players to start');
+            return;
+        }
+        const idx = Math.floor(Math.random() * availablePlayers.length);
+        const randomPlayer = availablePlayers[idx];
+        await handleStartAuction(randomPlayer);
+    };
+
+    const handlePlaceBid = async () => {
+        if (!selectedTeam || !canBid) {
+            alert('You do not have permission to bid');
+            return;
+        }
+
+        const minAllowedNow = Math.round((currentAuction?.current_bid || 0) + MIN_INCREMENT);
+        if (bidAmount < minAllowedNow) {
+            const minLakhs = (minAllowedNow / 100000).toFixed(2);
+            alert(`You must bid at least ₹${minLakhs} L`);
+            setBidAmount(minAllowedNow);
+            return;
+        }
+
+        if (bidAmount > selectedTeam.remaining_budget) {
+            alert('Insufficient budget');
+            return;
+        }
+
+        try {
+            const data = await auctionAPI.placeBid(currentAuction.id, selectedTeam.id, bidAmount);
+            if (data.error) {
+                alert(data.error);
+            }
+        } catch (error) {
+            alert('Failed to place bid');
+        }
+    };
+
+    // Helper to adjust bid in rupees while clamping to minimum allowed (current bid + 0.5L)
+    const MIN_INCREMENT = 50000;
+    const adjustBid = (delta) => {
+        setBidAmount((prev) => {
+            const current = Number.isFinite(prev) ? prev : 0;
+            const minAllowed = currentAuction ? Math.round((currentAuction.current_bid || 0) + MIN_INCREMENT) : 0;
+            const next = Math.round(current + delta);
+            return Math.max(next, minAllowed);
+        });
+    };
+
+    const handleFinalizeAuction = async () => {
+        if (!currentAuction) return;
+        
+        const confirm = window.confirm('Finalize this auction?');
+        if (!confirm) return;
+
+        try {
+            const data = await auctionAPI.finalize(currentAuction.id);
+            if (data.error) {
+                alert(data.error);
+            }
+        } catch (error) {
+            alert('Failed to finalize auction');
+        }
+    };
+
+    const handleDistributeRemaining = async () => {
+        if (!isHost) return;
+        const ok = window.confirm('Randomly distribute remaining players to teams with capacity and budget?');
+        if (!ok) return;
+        try {
+            const res = await auctionAPI.distributeRemaining(tournamentId);
+            if (res.error) {
+                alert(res.error);
+            } else {
+                alert(`Assigned ${res.assigned || 0} players`);
+                // Refresh teams and available players
+                fetchTournamentData();
+            }
+        } catch (e) {
+            alert('Failed to distribute players');
+        }
+    };
+
+    const handleEndAuction = async () => {
+        if (!isHost) return;
+        const ok = window.confirm('End the auction and view summary?');
+        if (!ok) return;
+        try {
+            const res = await auctionAPI.endAuction(tournamentId);
+            if (res.error) {
+                alert(res.error);
+            } else {
+                navigate(`/tournament/${tournamentId}/summary`);
+            }
+        } catch (e) {
+            alert('Failed to end auction');
+        }
+    };
+
+    const handleGiveUp = async () => {
+        if (!currentAuction || !selectedTeam) return;
+        
+        const confirm = window.confirm('Are you sure you want to give up on this player? You won\'t be able to bid again.');
+        if (!confirm) return;
+
+        try {
+            const data = await auctionAPI.giveUp(currentAuction.id, selectedTeam.id);
+            if (data.error) {
+                alert(data.error);
+            } else {
+                setHasGivenUp(true);
+                setMessage(`${selectedTeam.team_name} gave up on ${currentPlayer.name}`);
+            }
+        } catch (error) {
+            alert('Failed to give up on player');
+        }
+    };
+
+    const openTeamHoverPanel = async (team) => {
+        if (hoverCloseTimerRef.current) {
+            clearTimeout(hoverCloseTimerRef.current);
+            hoverCloseTimerRef.current = null;
+        }
+        setHoveredTeamId(team.id);
+        if (teamPurchasesMap[team.id]) return; // already cached
+        try {
+            setHoverLoadingTeamId(team.id);
+            const purchases = await auctionAPI.getPurchases(team.id);
+            setTeamPurchasesMap(prev => ({ ...prev, [team.id]: Array.isArray(purchases) ? purchases : [] }));
+        } finally {
+            setHoverLoadingTeamId(null);
+        }
+    };
+
+    const scheduleCloseHoverPanel = () => {
+        if (hoverCloseTimerRef.current) clearTimeout(hoverCloseTimerRef.current);
+        hoverCloseTimerRef.current = setTimeout(() => {
+            setHoveredTeamId(null);
+        }, 150);
+    };
+

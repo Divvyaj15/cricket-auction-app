@@ -374,40 +374,73 @@ const AuctionRoom = () => {
     };
 
     if (!tournament) {
-        return <div className="flex items-center justify-center h-screen">Loading...</div>;
+        return (
+            <div className="flex items-center justify-center h-screen bg-slate-950">
+                <div className="text-center">
+                    <div className="mx-auto mb-4 w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-800 flex items-center justify-center shadow-lg">
+                        <span className="text-2xl">🏏</span>
+                    </div>
+                    <p className="font-semibold text-slate-200">Loading auction room…</p>
+                </div>
+            </div>
+        );
     }
 
+    const bidButtons = [
+        { label: '-₹5L', delta: -500000 },
+        { label: '-₹1L', delta: -100000 },
+        { label: '-₹0.5L', delta: -50000 },
+        { label: 'Reset', delta: 0 },
+        { label: '+₹0.5L', delta: 50000 },
+        { label: '+₹1L', delta: 100000 },
+        { label: '+₹5L', delta: 500000 },
+        { label: '+₹10L', delta: 1000000 },
+    ];
+
     return (
-        <div className="min-h-screen bg-gray-900 text-white">
-            {/* Header */}
-            <nav className="bg-gray-800 shadow-lg">
+        <div className="min-h-screen bg-slate-950 text-slate-100">
+            <nav className="sticky top-0 z-30 bg-slate-950/90 backdrop-blur-md border-b border-slate-800">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex justify-between items-center h-16">
+                    <div className="flex justify-between items-center h-16 gap-3">
                         <button
+                            type="button"
                             onClick={() => navigate(`/tournament/${tournamentId}`)}
-                            className="text-blue-400 hover:text-blue-300"
+                            className="text-sm font-semibold text-slate-400 hover:text-emerald-400 transition shrink-0"
                         >
-                            ← Back to Tournament
+                            ← Tournament
                         </button>
-                        <h1 className="text-2xl font-bold">{tournament.name} - Auction Room</h1>
-                        <div className="flex items-center gap-3 text-sm">
+                        <div className="min-w-0 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                                <span className="relative flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                                </span>
+                                <h1 className="text-sm sm:text-lg font-bold text-white truncate">
+                                    {tournament.name}
+                                </h1>
+                            </div>
+                            <p className="text-[11px] text-amber-400/90 font-semibold tracking-wide uppercase">Auction room</p>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm shrink-0">
                             <button
+                                type="button"
                                 onClick={() => navigate(`/tournament/${tournamentId}/history`)}
-                                className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600"
+                                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs sm:text-sm font-semibold transition"
                             >
-                                Auction History
+                                History
                             </button>
                             {!isHost && selectedTeam && (
                                 <>
-                                    <div className="text-right mr-2 hidden sm:block">
-                                        <p className="font-semibold">{selectedTeam.team_name}</p>
-                                        <p className="text-green-400">₹{(selectedTeam.remaining_budget / 100000).toFixed(2)} Cr</p>
+                                    <div className="text-right hidden md:block mr-1">
+                                        <p className="font-semibold text-white text-xs leading-tight">{selectedTeam.team_name}</p>
+                                        <p className="text-emerald-400 text-xs font-bold">₹{(selectedTeam.remaining_budget / 100000).toFixed(2)} L</p>
                                     </div>
                                     <button
+                                        type="button"
                                         onClick={() => navigate(`/team/${selectedTeam.id}/squad?tournamentId=${tournamentId}`)}
-                                        className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500"
+                                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-semibold transition"
                                     >
-                                        My Squad
+                                        Squad
                                     </button>
                                 </>
                             )}
@@ -416,49 +449,57 @@ const AuctionRoom = () => {
                 </div>
             </nav>
 
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-5">
                 {isHost && (
-                    <div className="bg-gray-800 rounded-lg p-4 mb-6 space-y-3">
+                    <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 sm:p-5 space-y-4 shadow-lg">
                         <div className="flex flex-wrap gap-3 items-center justify-between">
-                            <div className="text-sm text-gray-300">Host Controls</div>
-                            <div className="flex gap-3">
+                            <div>
+                                <p className="text-xs font-bold uppercase tracking-wider text-amber-400">Host controls</p>
+                                <p className="text-sm text-slate-400 mt-0.5">Manage the floor and end the session</p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
                                 <button
+                                    type="button"
                                     onClick={handleDistributeRemaining}
-                                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded"
+                                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-sm font-semibold rounded-xl transition"
                                 >
-                                    Distribute Remaining Players
+                                    Distribute remaining
                                 </button>
                                 <button
+                                    type="button"
                                     onClick={handleEndAuction}
-                                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded"
+                                    className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-semibold rounded-xl transition"
                                 >
-                                    End Auction
+                                    End auction
                                 </button>
                             </div>
                         </div>
-                        {/* Team Owner Status Panel */}
-                        <div className={`rounded-lg p-3 ${allOwnersReady ? 'bg-green-900 bg-opacity-40' : 'bg-yellow-900 bg-opacity-40'}`}>
-                            <div className="flex items-center justify-between mb-2">
-                                <p className={`text-sm font-semibold ${allOwnersReady ? 'text-green-300' : 'text-yellow-300'}`}>
-                                    {allOwnersReady ? '✅ All teams have owners assigned' : '⏳ Waiting for all teams to have owners...'}
+                        <div className={`rounded-xl p-3.5 border ${allOwnersReady ? 'bg-emerald-950/50 border-emerald-800/60' : 'bg-amber-950/40 border-amber-800/50'}`}>
+                            <div className="flex items-center justify-between gap-3 mb-2.5">
+                                <p className={`text-sm font-semibold ${allOwnersReady ? 'text-emerald-300' : 'text-amber-300'}`}>
+                                    {allOwnersReady ? 'All teams have owners assigned' : 'Waiting for all teams to have owners…'}
                                 </p>
                                 <button
+                                    type="button"
                                     onClick={fetchTournamentData}
-                                    className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded transition"
+                                    className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded-lg transition border border-slate-700"
                                 >
-                                    🔄 Refresh
+                                    Refresh
                                 </button>
                             </div>
                             <div className="flex flex-wrap gap-2">
                                 {allTeams.map(team => {
                                     const hasOwner = team.members && team.members.some(m => m.role === 'owner');
                                     return (
-                                        <span key={team.id} className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                            hasOwner 
-                                                ? 'bg-green-600 text-white' 
-                                                : 'bg-gray-600 text-gray-300'
-                                        }`}>
-                                            {hasOwner ? '🟢' : '🔴'} {team.team_name}
+                                        <span
+                                            key={team.id}
+                                            className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+                                                hasOwner
+                                                    ? 'bg-emerald-600/30 text-emerald-200 border-emerald-500/40'
+                                                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                                            }`}
+                                        >
+                                            {hasOwner ? '●' : '○'} {team.team_name}
                                         </span>
                                     );
                                 })}
@@ -466,67 +507,63 @@ const AuctionRoom = () => {
                         </div>
                     </div>
                 )}
-                {/* Finalize Modal */}
+
                 {finalizeModal && (() => {
                     const isMyTeamWinner = finalizeModal.status === 'sold' && selectedTeam && selectedTeam.id === finalizeModal.winning_team_id;
                     const isSold = finalizeModal.status === 'sold';
                     return (
-                        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" style={{animation: 'fadeIn 0.3s ease-out'}}>
-                            <div className={`rounded-2xl p-8 w-full max-w-md shadow-2xl text-center ${
-                                isMyTeamWinner 
-                                    ? 'bg-gradient-to-br from-green-600 to-emerald-700 text-white' 
-                                    : isSold 
-                                        ? 'bg-gradient-to-br from-purple-600 to-blue-700 text-white'
-                                        : 'bg-gradient-to-br from-red-600 to-red-800 text-white'
-                            }`} style={{animation: 'scaleIn 0.3s ease-out'}}>
-                                {/* Icon */}
-                                <div className="text-6xl mb-4">
-                                    {isMyTeamWinner ? '🎉' : isSold ? '🏏' : '😔'}
+                        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                            <div
+                                className={`rounded-2xl p-8 w-full max-w-md shadow-2xl text-center border ${
+                                    isMyTeamWinner
+                                        ? 'bg-gradient-to-br from-emerald-600 to-teal-800 border-emerald-400/30 text-white'
+                                        : isSold
+                                            ? 'bg-gradient-to-br from-slate-800 to-slate-900 border-amber-500/30 text-white'
+                                            : 'bg-gradient-to-br from-red-700 to-red-900 border-red-400/30 text-white'
+                                }`}
+                                style={{ animation: 'scaleIn 0.3s ease-out' }}
+                            >
+                                <div className="text-5xl mb-4">
+                                    {isMyTeamWinner ? '🎉' : isSold ? '🔨' : '😔'}
                                 </div>
-
-                                {/* Title */}
-                                <h3 className="text-3xl font-black mb-2">
+                                <h3 className="text-3xl font-black mb-2 tracking-tight">
                                     {isMyTeamWinner ? 'CONGRATULATIONS!' : isSold ? 'SOLD!' : 'UNSOLD'}
                                 </h3>
-
                                 {isMyTeamWinner && (
-                                    <p className="text-lg text-green-100 mb-4">🎊 Your team won this player! 🎊</p>
+                                    <p className="text-base text-emerald-100 mb-4">Your team won this player</p>
                                 )}
-
-                                {/* Player Name */}
-                                <div className="bg-white bg-opacity-20 rounded-xl p-4 mb-4">
+                                <div className="bg-white/15 rounded-xl p-4 mb-4 border border-white/10">
                                     <p className="text-2xl font-bold">{finalizeModal.player_name}</p>
                                 </div>
-
                                 {isSold && (
                                     <div className="space-y-2 mb-4">
-                                        <p className="text-xl">
+                                        <p className="text-lg">
                                             <span className="opacity-80">Bought by</span>
-                                            <br/>
+                                            <br />
                                             <span className="font-bold text-2xl">{finalizeModal.team_name}</span>
                                         </p>
-                                        <p className="text-3xl font-black">
+                                        <p className="text-3xl font-black text-amber-300">
                                             ₹{finalizeModal.price_lakhs} L
                                         </p>
                                     </div>
                                 )}
-
                                 {!isSold && (
                                     <p className="text-lg opacity-80 mb-4">No bids were placed for this player</p>
                                 )}
-
                                 <div className="flex gap-3 justify-center mt-4">
-                                    <button 
-                                        onClick={() => setFinalizeModal(null)} 
-                                        className="px-5 py-2 rounded-lg bg-white bg-opacity-20 hover:bg-opacity-30 transition font-semibold"
+                                    <button
+                                        type="button"
+                                        onClick={() => setFinalizeModal(null)}
+                                        className="px-5 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 transition font-semibold"
                                     >
                                         Close
                                     </button>
-                                    <button 
-                                        onClick={() => { setFinalizeModal(null); navigate(`/tournament/${tournamentId}/history`); }} 
-                                        className="px-5 py-2 rounded-lg bg-white text-gray-900 hover:bg-gray-100 transition font-semibold"
+                                    <button
+                                        type="button"
+                                        onClick={() => { setFinalizeModal(null); navigate(`/tournament/${tournamentId}/history`); }}
+                                        className="px-5 py-2.5 rounded-xl bg-white text-slate-900 hover:bg-slate-100 transition font-semibold"
                                     >
-                                        View History
+                                        View history
                                     </button>
                                 </div>
                             </div>
@@ -534,288 +571,279 @@ const AuctionRoom = () => {
                     );
                 })()}
 
-                {/* No blocking modal here; hover cards are rendered inline near each team */}
-                {/* Status Message */}
                 {message && (
-                    <div className="bg-blue-600 text-white px-6 py-3 rounded-lg mb-6 text-center text-lg font-semibold">
+                    <div className="rounded-xl border border-sky-500/30 bg-sky-500/15 text-sky-100 px-5 py-3 text-center text-sm sm:text-base font-semibold">
                         {message}
                     </div>
                 )}
                 {giveUpTeams && giveUpTeams.length > 0 && (
-                    <div className="bg-red-900 bg-opacity-40 text-red-200 px-6 py-3 rounded-lg mb-6 text-center text-sm">
+                    <div className="rounded-xl border border-red-500/30 bg-red-950/40 text-red-200 px-5 py-3 text-center text-sm">
                         {giveUpTeams[giveUpTeams.length - 1]?.team_name} gave up on {currentPlayer?.name}
                     </div>
                 )}
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Main Auction Area */}
-                    <div className="lg:col-span-2 space-y-6">
-                        {/* Current Auction */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                    <div className="lg:col-span-2 space-y-5">
                         {currentAuction && currentPlayer ? (
-                            <div className="bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg p-8 shadow-2xl">
-                                <div className="text-center mb-6">
-                                    <h2 className="text-4xl font-bold mb-2">{currentPlayer.name}</h2>
-                                    <p className="text-xl text-purple-200">{currentPlayer.role}</p>
-                                    <p className="text-sm text-purple-200 mt-2">
-                                        Base Price: ₹{(currentPlayer.base_price / 100000).toFixed(2)} L
-                                    </p>
-                                </div>
-
-                                <div className="bg-white bg-opacity-20 rounded-lg p-6 mb-6">
-                                    <div className="text-center">
-                                        <p className="text-sm text-purple-200 mb-2">Current Bid</p>
-                                        <p className="text-5xl font-bold">
-                                            ₹{(currentAuction.current_bid / 100000).toFixed(2)} L
-                                        </p>
-                                        {currentAuction.current_bidder_name && (
-                                            <p className="text-lg mt-2 text-purple-200">
-                                                by {currentAuction.current_bidder_name}
-                                            </p>
-                                        )}
+                            <div className="relative overflow-hidden rounded-2xl border border-emerald-800/50 bg-gradient-to-br from-emerald-950 via-slate-900 to-slate-950 p-6 sm:p-8 shadow-2xl">
+                                <div className="absolute top-0 right-0 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl" />
+                                <div className="relative">
+                                    <div className="flex items-center justify-between mb-5">
+                                        <span className="inline-flex items-center gap-1.5 text-[10px] font-bold tracking-widest uppercase text-red-300 bg-red-500/15 border border-red-500/30 px-2.5 py-1 rounded-full">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                                            Live
+                                        </span>
                                         {Number.isFinite(secondsRemaining) && secondsRemaining !== null && (
-                                            <p className="mt-3 text-yellow-300 font-semibold">
-                                                Finalizing in {secondsRemaining}s …
-                                            </p>
+                                            <span className="text-xs font-bold font-mono text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-lg">
+                                                ⏱ {secondsRemaining}s
+                                            </span>
                                         )}
                                     </div>
-                                </div>
 
-                                {/* Bidding Controls */}
-                                {!isHost && canBid && !hasGivenUp && (
-                                    <div className="space-y-4">
-                                        <div>
-                                            <label className="block text-sm font-medium mb-2">Your Bid Amount</label>
-                                            <div className="flex space-x-2">
-                                                <input
-                                                    type="number"
-                                                    value={Number((bidAmount / 100000).toFixed(2))}
-                                                    onChange={(e) => {
-                                                        const lakhs = parseFloat(e.target.value || '0');
-                                                        if (isNaN(lakhs)) return;
-                                                        // Store as integer rupees, rounded to the nearest rupee to avoid FP artifacts
-                                                        setBidAmount(Math.round(lakhs * 100000));
-                                                    }}
-                                                    step="0.5"
-                                                    className="flex-1 px-4 py-3 bg-white bg-opacity-20 rounded-lg text-white text-xl font-bold focus:outline-none focus:ring-2 focus:ring-white"
-                                                />
-                                                <span className="flex items-center text-xl font-semibold">L</span>
+                                    <div className="text-center mb-6">
+                                        <p className="text-[10px] font-bold tracking-[0.2em] uppercase text-emerald-400/80 mb-2">Player on the block</p>
+                                        <h2 className="text-3xl sm:text-4xl font-extrabold text-white mb-1 tracking-tight">{currentPlayer.name}</h2>
+                                        <p className="text-base text-emerald-200/80 capitalize">{currentPlayer.role}</p>
+                                        <p className="text-xs text-slate-400 mt-2">
+                                            Base price ₹{(currentPlayer.base_price / 100000).toFixed(2)} L
+                                        </p>
+                                    </div>
+
+                                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-5 sm:p-6 mb-6">
+                                        <div className="text-center">
+                                            <p className="text-[10px] font-bold tracking-widest uppercase text-amber-400/90 mb-1">Current bid</p>
+                                            <p className="text-4xl sm:text-5xl font-black text-amber-300 tracking-tight">
+                                                ₹{(currentAuction.current_bid / 100000).toFixed(2)}
+                                                <span className="text-lg font-bold text-amber-400/80 ml-1">L</span>
+                                            </p>
+                                            {currentAuction.current_bidder_name && (
+                                                <p className="text-sm mt-2 text-slate-300">
+                                                    Leading: <span className="font-bold text-white">{currentAuction.current_bidder_name}</span>
+                                                </p>
+                                            )}
+                                            {Number.isFinite(secondsRemaining) && secondsRemaining !== null && (
+                                                <p className="mt-3 text-amber-200 font-semibold text-sm">
+                                                    Finalizing in {secondsRemaining}s…
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {!isHost && canBid && !hasGivenUp && (
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-xs font-bold uppercase tracking-wide text-slate-400 mb-2">Your bid amount</label>
+                                                <div className="flex space-x-2">
+                                                    <input
+                                                        type="number"
+                                                        value={Number((bidAmount / 100000).toFixed(2))}
+                                                        onChange={(e) => {
+                                                            const lakhs = parseFloat(e.target.value || '0');
+                                                            if (isNaN(lakhs)) return;
+                                                            setBidAmount(Math.round(lakhs * 100000));
+                                                        }}
+                                                        step="0.5"
+                                                        className="flex-1 px-4 py-3 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-xl font-bold focus:outline-none focus:ring-2 focus:ring-amber-400/50"
+                                                    />
+                                                    <span className="flex items-center text-lg font-semibold text-slate-400 px-2">L</span>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
+                                                {bidButtons.map((b) => (
+                                                    <button
+                                                        key={b.label}
+                                                        type="button"
+                                                        onClick={() => adjustBid(b.delta)}
+                                                        className="bg-slate-800/80 hover:bg-slate-700 border border-slate-700 px-2 py-2 rounded-lg text-xs font-semibold text-slate-200 transition"
+                                                    >
+                                                        {b.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+
+                                            <div className="flex gap-3">
+                                                <button
+                                                    type="button"
+                                                    onClick={handlePlaceBid}
+                                                    disabled={bidAmount < Math.round((currentAuction?.current_bid || 0) + MIN_INCREMENT)}
+                                                    className="flex-1 bg-amber-400 hover:bg-amber-300 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-slate-900 font-black py-4 rounded-xl text-lg transition shadow-lg shadow-amber-900/20"
+                                                >
+                                                    PLACE BID
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleGiveUp}
+                                                    className="px-5 py-4 bg-red-600/90 hover:bg-red-500 text-white font-bold rounded-xl text-sm sm:text-base transition border border-red-500/50"
+                                                >
+                                                    GIVE UP
+                                                </button>
                                             </div>
                                         </div>
+                                    )}
 
-                                        <div className="grid grid-cols-8 gap-2">
+                                    {!isHost && hasGivenUp && (
+                                        <div className="text-center p-5 bg-red-950/50 border border-red-800/50 rounded-xl">
+                                            <p className="text-lg font-bold text-red-300">You have given up on this player</p>
+                                            <p className="text-sm text-red-200/80 mt-1">You cannot bid on {currentPlayer.name}</p>
+                                        </div>
+                                    )}
+
+                                    {isHost && (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            {secondsRemaining && secondsRemaining > 0 ? (
+                                                <button
+                                                    type="button"
+                                                    disabled
+                                                    className="w-full bg-amber-500 text-slate-900 font-bold py-4 rounded-xl text-lg opacity-90"
+                                                >
+                                                    Finalizing in {secondsRemaining}s
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={async () => {
+                                                        if (!currentAuction) return;
+                                                        await auctionAPI.warn(currentAuction.id, 10);
+                                                    }}
+                                                    className="w-full bg-amber-400 hover:bg-amber-300 text-slate-900 font-bold py-4 rounded-xl text-lg transition"
+                                                >
+                                                    WARN (10s)
+                                                </button>
+                                            )}
                                             <button
-                                                onClick={() => adjustBid(-500000)}
-                                                className="bg-white bg-opacity-20 hover:bg-opacity-30 px-3 py-2 rounded text-sm"
+                                                type="button"
+                                                onClick={handleFinalizeAuction}
+                                                className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-bold py-4 rounded-xl text-lg transition"
                                             >
-                                                -₹5L
-                                            </button>
-                                            <button
-                                                onClick={() => adjustBid(-100000)}
-                                                className="bg-white bg-opacity-20 hover:bg-opacity-30 px-3 py-2 rounded text-sm"
-                                            >
-                                                -₹1L
-                                            </button>
-                                            <button
-                                                onClick={() => adjustBid(-50000)}
-                                                className="bg-white bg-opacity-20 hover:bg-opacity-30 px-3 py-2 rounded text-sm"
-                                            >
-                                                -₹0.5L
-                                            </button>
-                                            <button
-                                                onClick={() => adjustBid(0)}
-                                                className="bg-white bg-opacity-20 hover:bg-opacity-30 px-3 py-2 rounded text-sm"
-                                            >
-                                                Reset
-                                            </button>
-                                            <button
-                                                onClick={() => adjustBid(50000)}
-                                                className="bg-white bg-opacity-20 hover:bg-opacity-30 px-3 py-2 rounded text-sm"
-                                            >
-                                                +₹0.5L
-                                            </button>
-                                            <button
-                                                onClick={() => adjustBid(100000)}
-                                                className="bg-white bg-opacity-20 hover:bg-opacity-30 px-3 py-2 rounded text-sm"
-                                            >
-                                                +₹1L
-                                            </button>
-                                            <button
-                                                onClick={() => adjustBid(500000)}
-                                                className="bg-white bg-opacity-20 hover:bg-opacity-30 px-3 py-2 rounded text-sm"
-                                            >
-                                                +₹5L
-                                            </button>
-                                            <button
-                                                onClick={() => adjustBid(1000000)}
-                                                className="bg-white bg-opacity-20 hover:bg-opacity-30 px-3 py-2 rounded text-sm"
-                                            >
-                                                +₹10L
+                                                FINALIZE NOW
                                             </button>
                                         </div>
-
-                                        <div className="flex gap-3">
-                                        <button
-                                            onClick={handlePlaceBid}
-                                            disabled={bidAmount < Math.round((currentAuction?.current_bid || 0) + MIN_INCREMENT)}
-                                            className="flex-1 bg-yellow-500 hover:bg-yellow-600 disabled:bg-gray-500 disabled:cursor-not-allowed text-gray-900 font-bold py-4 rounded-lg text-xl transition"
-                                        >
-                                            PLACE BID
-                                        </button>
-                                            <button
-                                                onClick={handleGiveUp}
-                                                className="px-6 py-4 bg-red-500 hover:bg-red-600 text-white font-bold rounded-lg text-xl transition"
-                                            >
-                                                GIVE UP
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Give Up Status */}
-                                {!isHost && hasGivenUp && (
-                                    <div className="text-center p-6 bg-red-500 bg-opacity-20 rounded-lg">
-                                        <p className="text-xl font-bold text-red-300">You have given up on this player</p>
-                                        <p className="text-sm text-red-200 mt-2">You cannot bid on {currentPlayer.name}</p>
-                                    </div>
-                                )}
-
-                                {/* Host Controls */}
-                                {isHost && (
-                                    <div className="grid grid-cols-2 gap-3">
-                                        {secondsRemaining && secondsRemaining > 0 ? (
-                                            <button
-                                                disabled
-                                                className="w-full bg-yellow-500 text-gray-900 font-bold py-4 rounded-lg text-xl opacity-80"
-                                            >
-                                                Finalizing in {secondsRemaining}s
-                                            </button>
-                                        ) : (
-                                            <button
-                                                onClick={async () => {
-                                                    if (!currentAuction) return;
-                                                    await auctionAPI.warn(currentAuction.id, 10);
-                                                }}
-                                                className="w-full bg-yellow-500 hover:bg-yellow-600 text-gray-900 font-bold py-4 rounded-lg text-xl transition"
-                                            >
-                                                WARN (10s)
-                                            </button>
-                                        )}
-                                        <button
-                                            onClick={handleFinalizeAuction}
-                                            className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 rounded-lg text-xl transition"
-                                        >
-                                            FINALIZE NOW
-                                        </button>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
                             </div>
                         ) : (
-                            <div className="bg-gray-800 rounded-lg p-12">
-                                <h2 className="text-3xl font-bold text-gray-200 mb-6">Next Player</h2>
+                            <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-8 sm:p-10 shadow-lg">
+                                <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Up next</p>
+                                <h2 className="text-2xl sm:text-3xl font-bold text-white mb-6">Next player</h2>
                                 {isHost ? (
                                     <>
                                         {availablePlayers.length > 0 ? (
-                                            <div className="flex items-center justify-between bg-gray-700 rounded-lg p-4 mb-6">
+                                            <div className="flex items-center justify-between bg-slate-950/60 border border-slate-800 rounded-xl p-4 mb-6">
                                                 <div>
-                                                    <p className="text-xl font-semibold">{availablePlayers[0].name}</p>
-                                                    <p className="text-sm text-gray-300">{availablePlayers[0].role}</p>
+                                                    <p className="text-xl font-semibold text-white">{availablePlayers[0].name}</p>
+                                                    <p className="text-sm text-slate-400 capitalize">{availablePlayers[0].role}</p>
                                                 </div>
                                                 <div className="text-right">
-                                                    <p className="text-sm text-gray-300">Base Price</p>
-                                                    <p className="text-2xl font-bold text-green-400">₹{(availablePlayers[0].base_price / 100000).toFixed(2)} L</p>
+                                                    <p className="text-xs text-slate-500 uppercase tracking-wide font-semibold">Base</p>
+                                                    <p className="text-2xl font-bold text-amber-300">₹{(availablePlayers[0].base_price / 100000).toFixed(2)} L</p>
                                                 </div>
                                             </div>
                                         ) : (
-                                            <p className="text-gray-500 mb-6">No players available</p>
+                                            <p className="text-slate-500 mb-6">No players available</p>
                                         )}
                                         {!allOwnersReady && (
-                                            <p className="text-yellow-400 text-sm mb-2 text-center">⏳ Waiting for all team owners to join before starting...</p>
+                                            <p className="text-amber-400 text-sm mb-3 text-center font-medium">
+                                                Waiting for all team owners to join before starting…
+                                            </p>
                                         )}
-                                        <div className="flex gap-3">
+                                        <div className="flex flex-col sm:flex-row gap-3">
                                             <button
+                                                type="button"
                                                 onClick={() => availablePlayers[0] && handleStartAuction(availablePlayers[0])}
                                                 disabled={availablePlayers.length === 0 || !allOwnersReady}
-                                                className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg"
+                                                className="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white px-6 py-3 rounded-xl font-bold transition"
                                             >
-                                                Start Next Player
+                                                Start next player
                                             </button>
                                             <button
+                                                type="button"
                                                 onClick={handleStartRandom}
                                                 disabled={availablePlayers.length === 0 || !allOwnersReady}
-                                                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg"
+                                                className="px-6 py-3 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-xl font-semibold border border-slate-700 transition"
                                             >
-                                                Start Random
+                                                Start random
                                             </button>
                                         </div>
                                     </>
                                 ) : (
-                                    <p className="text-center text-gray-400">Waiting for host to announce the next player…</p>
+                                    <p className="text-center text-slate-400 py-6">Waiting for host to announce the next player…</p>
                                 )}
                             </div>
                         )}
 
-                        {/* Bid History */}
-                        <div className="bg-gray-800 rounded-lg p-6">
-                            <h3 className="text-xl font-bold mb-4">Bid History</h3>
-                            <div className="space-y-2 max-h-64 overflow-y-auto">
+                        <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 sm:p-6 shadow-lg">
+                            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                                <span className="text-amber-400">📋</span> Bid history
+                            </h3>
+                            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                                 {bidHistory.length > 0 ? (
                                     bidHistory.map((bid, index) => (
-                                        <div key={index} className="bg-gray-700 px-4 py-3 rounded flex justify-between items-center">
+                                        <div
+                                            key={index}
+                                            className="bg-slate-950/60 border border-slate-800 px-4 py-3 rounded-xl flex justify-between items-center"
+                                        >
                                             <div>
-                                                <p className="font-semibold">{bid.team_name}</p>
-                                                <p className="text-sm text-gray-400">{bid.bidder_name}</p>
+                                                <p className="font-semibold text-white">{bid.team_name}</p>
+                                                <p className="text-xs text-slate-500">{bid.bidder_name}</p>
                                             </div>
-                                            <p className="text-lg font-bold text-green-400">
+                                            <p className="text-base font-bold text-amber-300">
                                                 ₹{(bid.bid_amount / 100000).toFixed(2)} L
                                             </p>
                                         </div>
                                     ))
                                 ) : (
-                                    <p className="text-gray-500 text-center py-4">No bids yet</p>
+                                    <p className="text-slate-500 text-center py-6 text-sm">No bids yet</p>
                                 )}
                             </div>
                         </div>
                     </div>
 
-                    {/* Sidebar */}
-                    <div className="space-y-6">
-                        {/* Available Players (visible to all; grouped by role; Start button only for host) */}
-                        <div className="bg-gray-800 rounded-lg p-6">
-                            <h3 className="text-xl font-bold mb-4">Available Players ({availablePlayers.length})</h3>
+                    <div className="space-y-5">
+                        <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 sm:p-6 shadow-lg">
+                            <h3 className="text-lg font-bold text-white mb-4">
+                                Available ({availablePlayers.length})
+                            </h3>
                             {(() => {
-                                const order = ['batsman','bowler','all-rounder','wicket-keeper'];
+                                const order = ['batsman', 'bowler', 'all-rounder', 'wicket-keeper'];
                                 const label = {
                                     'batsman': 'Batsmen',
                                     'bowler': 'Bowlers',
-                                    'all-rounder': 'All-Rounders',
-                                    'wicket-keeper': 'Wicket-Keepers'
+                                    'all-rounder': 'All-rounders',
+                                    'wicket-keeper': 'Wicket-keepers'
                                 };
                                 const groups = order.map(r => ({
                                     role: r,
                                     items: availablePlayers.filter(p => (p.role || '').toLowerCase() === r)
                                 })).filter(g => g.items.length > 0);
-                                if (groups.length === 0) return <p className="text-gray-500 text-center py-4">No players available</p>;
+                                if (groups.length === 0) return <p className="text-slate-500 text-center py-4 text-sm">No players available</p>;
                                 return (
-                                    <div className="space-y-5 max-h-96 overflow-y-auto pr-1">
+                                    <div className="space-y-4 max-h-96 overflow-y-auto pr-1">
                                         {groups.map(group => (
                                             <div key={group.role}>
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <p className="text-sm tracking-wide uppercase text-gray-300 font-semibold">{label[group.role]} <span className="ml-1 text-xs text-gray-400">({group.items.length})</span></p>
-                                                    <span className="h-px flex-1 bg-gray-700 ml-3" />
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <p className="text-[11px] tracking-wide uppercase text-slate-400 font-bold">
+                                                        {label[group.role]} <span className="text-slate-600">({group.items.length})</span>
+                                                    </p>
+                                                    <span className="h-px flex-1 bg-slate-800" />
                                                 </div>
                                                 <div className="grid grid-cols-1 gap-2">
                                                     {group.items.map(player => (
-                                                        <div key={player.id} className="bg-gray-700/70 hover:bg-gray-700 transition border border-gray-700 rounded px-4 py-3">
-                                                            <div className="flex justify-between items-center">
-                                                                <div>
-                                                                    <p className="font-semibold">{player.name}</p>
-                                                                    <p className="text-xs text-gray-400">Base ₹{(player.base_price / 100000).toFixed(2)} L</p>
+                                                        <div
+                                                            key={player.id}
+                                                            className="bg-slate-950/50 hover:bg-slate-950/80 transition border border-slate-800 rounded-xl px-3.5 py-2.5"
+                                                        >
+                                                            <div className="flex justify-between items-center gap-2">
+                                                                <div className="min-w-0">
+                                                                    <p className="font-semibold text-sm text-white truncate">{player.name}</p>
+                                                                    <p className="text-[11px] text-slate-500">Base ₹{(player.base_price / 100000).toFixed(2)} L</p>
                                                                 </div>
                                                                 {isHost && (
                                                                     <button
+                                                                        type="button"
                                                                         onClick={() => handleStartAuction(player)}
                                                                         disabled={currentAuction !== null}
-                                                                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded text-xs"
+                                                                        className="shrink-0 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-lg text-xs font-semibold transition"
                                                                     >
                                                                         Start
                                                                     </button>
@@ -831,57 +859,64 @@ const AuctionRoom = () => {
                             })()}
                         </div>
 
-                        {/* Teams Budget Summary */}
-                        <div className="bg-gray-800 rounded-lg p-6">
-                            <h3 className="text-xl font-bold mb-4">Teams Budget</h3>
-                            <div className="space-y-3 max-h-96 overflow-y-auto">
+                        <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 sm:p-6 shadow-lg">
+                            <h3 className="text-lg font-bold text-white mb-4">Team purses</h3>
+                            <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
                                 {allTeams.map((team) => {
-                                    const hasGivenUp = Array.isArray(giveUpTeams) && giveUpTeams.some(giveUp => giveUp.team_id === team.id);
+                                    const teamGaveUp = Array.isArray(giveUpTeams) && giveUpTeams.some(giveUp => giveUp.team_id === team.id);
                                     return (
-                                        <div key={team.id} className={`px-4 py-3 rounded ${hasGivenUp ? 'bg-red-900 bg-opacity-50' : 'bg-gray-700'}`}>
-                                            <div className="flex justify-between items-center">
-                                                <div className="relative">
+                                        <div
+                                            key={team.id}
+                                            className={`px-3.5 py-3 rounded-xl border ${
+                                                teamGaveUp
+                                                    ? 'bg-red-950/40 border-red-800/50'
+                                                    : 'bg-slate-950/50 border-slate-800'
+                                            }`}
+                                        >
+                                            <div className="flex justify-between items-center gap-2">
+                                                <div className="relative min-w-0">
                                                     <button
+                                                        type="button"
                                                         onMouseEnter={() => openTeamHoverPanel(team)}
                                                         onMouseLeave={scheduleCloseHoverPanel}
-                                                        className={`font-semibold text-left hover:underline ${hasGivenUp ? 'text-red-300' : ''}`}
+                                                        className={`font-semibold text-left text-sm hover:underline truncate ${teamGaveUp ? 'text-red-300' : 'text-white'}`}
                                                     >
                                                         {team.team_name}
-                                                        {hasGivenUp && <span className="text-xs ml-2 text-red-400">(GAVE UP)</span>}
+                                                        {teamGaveUp && <span className="text-[10px] ml-1.5 text-red-400 font-bold">(GAVE UP)</span>}
                                                     </button>
                                                     {hoveredTeamId === team.id && (
                                                         <div
                                                             onMouseEnter={() => { if (hoverCloseTimerRef.current) { clearTimeout(hoverCloseTimerRef.current); hoverCloseTimerRef.current = null; } }}
                                                             onMouseLeave={scheduleCloseHoverPanel}
-                                                            className="absolute left-0 mt-2 z-50 w-72 bg-white text-gray-900 rounded-lg shadow-lg border p-3"
+                                                            className="absolute left-0 mt-2 z-50 w-72 bg-white text-slate-900 rounded-xl shadow-2xl border border-slate-200 p-3"
                                                         >
-                                                            <p className="text-sm font-semibold mb-2">Squad</p>
+                                                            <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Squad</p>
                                                             {hoverLoadingTeamId === team.id ? (
-                                                                <p className="text-xs text-gray-600 py-2">Loading…</p>
+                                                                <p className="text-xs text-slate-500 py-2">Loading…</p>
                                                             ) : (
-                                                                <div className="max-h-64 overflow-y-auto space-y-2">
+                                                                <div className="max-h-64 overflow-y-auto space-y-1.5">
                                                                     {(teamPurchasesMap[team.id] || []).length > 0 ? (
                                                                         (teamPurchasesMap[team.id] || []).map((p) => (
-                                                                            <div key={p.id} className="flex items-center justify-between border rounded px-2 py-1">
+                                                                            <div key={p.id} className="flex items-center justify-between border border-slate-100 rounded-lg px-2 py-1.5 bg-slate-50">
                                                                                 <div>
                                                                                     <p className="text-sm font-medium">{p.name}</p>
-                                                                                    <p className="text-[11px] text-gray-600">{p.role}</p>
+                                                                                    <p className="text-[11px] text-slate-500 capitalize">{p.role}</p>
                                                                                 </div>
-                                                                                <p className="text-[12px] font-bold text-green-600">₹{((p.purchase_price || 0) / 100000).toFixed(2)} L</p>
+                                                                                <p className="text-[12px] font-bold text-emerald-600">₹{((p.purchase_price || 0) / 100000).toFixed(2)} L</p>
                                                                             </div>
                                                                         ))
                                                                     ) : (
-                                                                        <p className="text-xs text-gray-500 py-2">No players yet</p>
+                                                                        <p className="text-xs text-slate-400 py-2">No players yet</p>
                                                                     )}
                                                                 </div>
                                                             )}
                                                         </div>
                                                     )}
                                                 </div>
-                                                <p className={`font-bold ${
-                                                    hasGivenUp ? 'text-red-400' :
-                                                    team.remaining_budget > 5000000 ? 'text-green-400' :
-                                                    team.remaining_budget > 2000000 ? 'text-yellow-400' :
+                                                <p className={`font-bold text-sm shrink-0 ${
+                                                    teamGaveUp ? 'text-red-400' :
+                                                    team.remaining_budget > 5000000 ? 'text-emerald-400' :
+                                                    team.remaining_budget > 2000000 ? 'text-amber-300' :
                                                     'text-red-400'
                                                 }`}>
                                                     ₹{(team.remaining_budget / 100000).toFixed(2)} L
@@ -891,7 +926,7 @@ const AuctionRoom = () => {
                                                 <div className="mt-2 flex flex-wrap gap-1">
                                                     {team.members.map((member, idx) => (
                                                         member.user_id && (
-                                                            <span key={idx} className="text-xs bg-gray-600 px-2 py-1 rounded">
+                                                            <span key={idx} className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700">
                                                                 {member.name}
                                                             </span>
                                                         )
@@ -904,10 +939,9 @@ const AuctionRoom = () => {
                             </div>
                         </div>
 
-                        {/* Team Selector (for team members with multiple teams) */}
                         {!isHost && myTeams.length > 1 && (
-                            <div className="bg-gray-800 rounded-lg p-6">
-                                <h3 className="text-xl font-bold mb-4">Select Team</h3>
+                            <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 shadow-lg">
+                                <h3 className="text-lg font-bold text-white mb-3">Select team</h3>
                                 <select
                                     value={selectedTeam?.id || ''}
                                     onChange={(e) => {
@@ -915,7 +949,7 @@ const AuctionRoom = () => {
                                         setSelectedTeam(team);
                                         teamAPI.canBid(team.id).then(data => setCanBid(data.can_bid));
                                     }}
-                                    className="w-full px-4 py-2 bg-gray-700 rounded-lg text-white"
+                                    className="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
                                 >
                                     {myTeams.map((team) => (
                                         <option key={team.id} value={team.id}>
