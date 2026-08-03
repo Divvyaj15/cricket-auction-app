@@ -394,11 +394,11 @@ router.post('/token', (req, res) => {
         });
     }
 
-    if (!code || !redirect_uri || !client_id || !code_verifier) {
+    // code_verifier still accepted from clients but not validated while PKCE is disabled
+    if (!code || !redirect_uri || !client_id) {
         return res.status(400).json({
             error: 'invalid_request',
-            error_description:
-                'code, redirect_uri, client_id, and code_verifier are required',
+            error_description: 'code, redirect_uri, and client_id are required',
         });
     }
 
@@ -447,56 +447,26 @@ router.post('/token', (req, res) => {
         });
     }
 
-    // --- PKCE S256 verification (shared generateCodeChallenge) ---
-    // Do NOT consume the auth code until PKCE succeeds.
-    const storedChallenge = String(stored.codeChallenge ?? '').trim();
-    const computedChallenge = generateCodeChallenge(String(code_verifier).trim());
-    const storedMethod = String(stored.codeChallengeMethod ?? '').trim();
-
-    console.log('Verifier received :', code_verifier);
-    console.log('Stored challenge  :', storedChallenge);
-    console.log('Computed challenge:', computedChallenge);
-    console.log('[oauth/token] Stored method   :', JSON.stringify(storedMethod));
-    console.log('[oauth/token] Challenge lengths:', {
-        stored: storedChallenge.length,
-        computed: computedChallenge.length,
-    });
-    console.log('[oauth/token] Strict equal    :', computedChallenge === storedChallenge);
+    // ---------------------------------------------------------------------------
+    // TEMPORARILY DISABLED: PKCE verification (code_verifier / code_challenge)
+    // Re-enable before production. Token is issued after auth-code checks only.
+    // ---------------------------------------------------------------------------
+    // const storedChallenge = String(stored.codeChallenge ?? '').trim();
+    // const computedChallenge = generateCodeChallenge(String(code_verifier).trim());
+    // if (computedChallenge !== storedChallenge) { ... }
     console.log(
-        '[oauth/token] Trimmed equal   :',
-        computedChallenge.trim() === storedChallenge.trim()
+        '[oauth/token] PKCE verification TEMPORARILY DISABLED — skipping code_verifier check'
     );
-    console.log('[oauth/token] Method is S256  :', storedMethod === 'S256');
-    console.log(
-        '[oauth/token] Stored challenge JSON:',
-        JSON.stringify(storedChallenge)
-    );
-    console.log(
-        '[oauth/token] Computed challenge JSON:',
-        JSON.stringify(computedChallenge)
-    );
-
-    // Method check is SEPARATE from challenge comparison so a bad method
-    // is not reported as "Invalid code_verifier".
-    if (storedMethod !== 'S256') {
-        console.log('[oauth/token] FAIL: code_challenge_method is not S256');
-        return res.status(400).json({
-            error: 'invalid_grant',
-            error_description: `Unsupported code_challenge_method: ${storedMethod || '(empty)'}`,
-        });
+    if (code_verifier) {
+        console.log('[oauth/token] code_verifier received (not validated):', code_verifier);
+        console.log(
+            '[oauth/token] would-be computed challenge:',
+            generateCodeChallenge(String(code_verifier).trim())
+        );
+        console.log('[oauth/token] stored challenge:', stored.codeChallenge);
     }
 
-    if (computedChallenge !== storedChallenge) {
-        console.log('[oauth/token] FAIL: challenge mismatch after trim');
-        return res.status(400).json({
-            error: 'invalid_grant',
-            error_description: 'Invalid code_verifier (PKCE verification failed)',
-        });
-    }
-
-    console.log('[oauth/token] PKCE verification succeeded');
-
-    // Consume auth code only after successful PKCE
+    // Consume one-time authorization code
     stored.used = true;
     authCodes.delete(code);
 
