@@ -259,6 +259,34 @@ function validateAuthorizeParams(source) {
 }
 
 /**
+ * POST /oauth/register
+ *
+ * RFC 7591 Dynamic Client Registration (minimal stub).
+ * Public — no authentication required.
+ * Always returns client_id "cursor" for now (no real client store yet).
+ */
+router.post('/register', (req, res) => {
+    const body = req.body || {};
+    const redirect_uris = Array.isArray(body.redirect_uris)
+        ? body.redirect_uris
+        : body.redirect_uri
+          ? [body.redirect_uri]
+          : [];
+
+    // Always issue the same static client for now
+    return res.status(201).json({
+        client_id: 'cursor',
+        client_id_issued_at: Math.floor(Date.now() / 1000),
+        client_name: body.client_name || 'cursor',
+        redirect_uris,
+        grant_types: body.grant_types || ['authorization_code'],
+        response_types: body.response_types || ['code'],
+        token_endpoint_auth_method:
+            body.token_endpoint_auth_method || 'none',
+    });
+});
+
+/**
  * GET /oauth/authorize
  *
  * OAuth 2.1 Authorization Code + PKCE.
