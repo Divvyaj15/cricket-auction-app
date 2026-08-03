@@ -259,13 +259,15 @@ function validateAuthorizeParams(source) {
 }
 
 /**
- * POST /oauth/register
- *
  * RFC 7591 Dynamic Client Registration (minimal stub).
  * Public — no authentication required.
  * Always returns client_id "cursor" for now (no real client store yet).
+ *
+ * Mounted at:
+ *   POST /oauth/register
+ *   POST /register  (root alias in server.js)
  */
-router.post('/register', (req, res) => {
+function handleClientRegistration(req, res) {
     const body = req.body || {};
     const redirect_uris = Array.isArray(body.redirect_uris)
         ? body.redirect_uris
@@ -284,7 +286,9 @@ router.post('/register', (req, res) => {
         token_endpoint_auth_method:
             body.token_endpoint_auth_method || 'none',
     });
-});
+}
+
+router.post('/register', handleClientRegistration);
 
 /**
  * GET /oauth/authorize
@@ -517,3 +521,4 @@ router.post('/token', (req, res) => {
 });
 
 module.exports = router;
+module.exports.handleClientRegistration = handleClientRegistration;

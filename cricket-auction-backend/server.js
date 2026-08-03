@@ -97,7 +97,9 @@ app.use('/api/tournaments', tournamentRoutes);
 app.use('/api/teams', teamRoutes);
 app.use('/api/players', playerRoutes);
 app.use('/api/auction', auctionRoutes);
-app.use('/oauth', oauthRoutes);                         // ← added
+app.use('/oauth', oauthRoutes);                         // ← /oauth/authorize, /oauth/token, /oauth/register
+// Root alias for Dynamic Client Registration (some clients call POST /register)
+app.post('/register', oauthRoutes.handleClientRegistration);
 
 // Socket.io
 require('./socket/auctionSocket')(io, pool);
