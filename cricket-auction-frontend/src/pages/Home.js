@@ -325,9 +325,18 @@ const Home = () => {
     }
 
     return (
-        <div className="min-h-screen bg-slate-950 text-slate-100">
+        <div className="relative min-h-screen bg-slate-950 text-slate-100">
+            {/* Fixed site-wide auction room backdrop (subtle) */}
+            <div
+                className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat"
+                style={{ backgroundImage: "url('/images/auction-room.jpg')" }}
+                aria-hidden="true"
+            />
+            <div className="fixed inset-0 z-0 bg-slate-950/85" aria-hidden="true" />
+
+            <div className="relative z-10">
             {/* Navbar */}
-            <nav className="sticky top-0 z-20 bg-slate-950/90 backdrop-blur border-b border-slate-800/80">
+            <nav className="sticky top-0 z-20 bg-slate-950/70 backdrop-blur-md border-b border-slate-800/80">
                 <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center h-16">
                         <div className="flex items-center space-x-3">
@@ -356,31 +365,36 @@ const Home = () => {
                 </div>
             </nav>
 
-            {/* Hero — stadium green + auction visual */}
-            <section className="relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-emerald-950 via-slate-950 to-slate-950" />
-                <PitchPattern />
-                {/* Pitch oval glow */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[60%] rounded-[100%] bg-emerald-600/10 blur-3xl" />
-                <div className="absolute top-0 right-0 w-72 h-72 bg-amber-500/10 rounded-full blur-3xl" />
+            {/* Hero — full auction room photo + UI mockup */}
+            <section className="relative overflow-hidden min-h-[calc(100vh-4rem)] flex items-center">
+                {/* Stronger photo in hero */}
+                <div
+                    className="absolute inset-0 bg-cover bg-center bg-no-repeat scale-105"
+                    style={{ backgroundImage: "url('/images/auction-room.jpg')" }}
+                    aria-hidden="true"
+                />
+                {/* Readable overlays: left dark for copy, softer right for visual */}
+                <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/90 to-slate-950/55" />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-slate-950/40" />
+                <div className="absolute inset-0 bg-emerald-950/25" />
 
-                <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20 lg:py-24">
+                <div className="relative w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20 lg:py-24">
                     <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
                         <div>
-                            <p className="inline-flex items-center gap-2 text-xs font-bold tracking-widest uppercase bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 px-3 py-1.5 rounded-full mb-6">
+                            <p className="inline-flex items-center gap-2 text-xs font-bold tracking-widest uppercase bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 px-3 py-1.5 rounded-full mb-6 backdrop-blur-sm">
                                 <span className="relative flex h-2 w-2">
                                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
                                     <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
                                 </span>
                                 Live cricket player auctions
                             </p>
-                            <h1 className="text-4xl sm:text-5xl lg:text-[3.25rem] font-extrabold leading-[1.1] tracking-tight mb-6 text-white">
+                            <h1 className="text-4xl sm:text-5xl lg:text-[3.25rem] font-extrabold leading-[1.1] tracking-tight mb-6 text-white drop-shadow-lg">
                                 Your own auction table.{' '}
                                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-amber-500">
                                     Real-time bids.
                                 </span>
                             </h1>
-                            <p className="text-lg text-slate-300 mb-8 max-w-xl leading-relaxed">
+                            <p className="text-lg text-slate-200 mb-8 max-w-xl leading-relaxed drop-shadow">
                                 Host IPL-style player auctions for your tournament. Teams bid live
                                 from the board, budgets update instantly, and every sale is logged —
                                 just like the big leagues.
@@ -394,12 +408,12 @@ const Home = () => {
                                 </Link>
                                 <Link
                                     to="/login"
-                                    className="inline-flex justify-center items-center px-8 py-3.5 text-base font-semibold rounded-xl border border-slate-600 text-white hover:bg-slate-800/80 transition"
+                                    className="inline-flex justify-center items-center px-8 py-3.5 text-base font-semibold rounded-xl border border-white/25 bg-slate-950/40 text-white hover:bg-slate-900/70 backdrop-blur-sm transition"
                                 >
                                     Sign in
                                 </Link>
                             </div>
-                            <div className="mt-10 flex flex-wrap gap-6 text-sm text-slate-400">
+                            <div className="mt-10 flex flex-wrap gap-6 text-sm text-slate-300">
                                 <div className="flex items-center gap-2">
                                     <span className="text-amber-400">🔨</span> Live bid board
                                 </div>
@@ -567,7 +581,7 @@ const Home = () => {
             </section>
 
             {/* Footer */}
-            <footer className="border-t border-slate-800 py-8 bg-slate-950">
+            <footer className="border-t border-slate-800/80 py-8 bg-slate-950/80 backdrop-blur-sm">
                 <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-500">
                     <div className="flex items-center gap-2">
                         <span className="text-lg">🏏</span>
@@ -586,6 +600,7 @@ const Home = () => {
                     </div>
                 </div>
             </footer>
+            </div>
         </div>
     );
 };
