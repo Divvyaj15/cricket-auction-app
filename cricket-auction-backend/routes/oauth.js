@@ -30,17 +30,14 @@ function generateAuthCode() {
 }
 
 /**
- * Compute S256 code_challenge using Node's built-in base64url digest.
- * Must match: crypto.createHash('sha256').update(code_verifier).digest('base64url')
+ * Shared PKCE S256 helper — identical hashing for authorize/token.
+ * Uses only Node's built-in base64url digest (no manual base64 transforms).
  */
-function computeS256Challenge(code_verifier) {
-    return crypto.createHash('sha256').update(code_verifier).digest('base64url');
-}
-
-function verifyPkce(codeVerifier, codeChallenge, method) {
-    if (method !== 'S256') return false;
-    const hash = computeS256Challenge(codeVerifier);
-    return hash === codeChallenge;
+function generateCodeChallenge(verifier) {
+    return require('crypto')
+        .createHash('sha256')
+        .update(verifier)
+        .digest('base64url');
 }
 
 function escapeHtml(str) {
@@ -74,7 +71,7 @@ function renderLoginForm({
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Sign in ΓÇö Cricket Auction</title>
+  <title>Sign in — Cricket Auction</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -166,15 +163,16 @@ function renderLoginForm({
  * Returns { ok: true, params } or { ok: false, status, body }.
  */
 function validateAuthorizeParams(source) {
-    const {
-        response_type,
-        client_id,
-        redirect_uri,
-        code_challenge,
-        code_challenge_method = 'S256',
-        state,
-        scope,
-    } = source;
+    const response_type = source.response_type;
+    const client_id = source.client_id;
+    const redirect_uri = source.redirect_uri;
+    // Store code_challenge exactly as received (trimmed only)
+    const code_challenge = source.code_challenge
+        ? String(source.code_challenge).trim()
+        : '';
+    const code_challenge_method = source.code_challenge_method || 'S256';
+    const state = source.state || '';
+    const scope = source.scope || '';
 
     if (response_type !== 'code') {
         return {
@@ -250,10 +248,10 @@ function validateAuthorizeParams(source) {
             response_type,
             client_id,
             redirect_uri,
-            code_challenge,
+            code_challenge, // trimmed, as received from client
             code_challenge_method,
-            state: state || '',
-            scope: scope || '',
+            state,
+            scope,
         },
     };
 }
@@ -330,16 +328,27 @@ router.post('/authorize', async (req, res) => {
 
         cleanupExpiredCodes();
 
+        // Store client code_challenge exactly as received (trimmed in validateAuthorizeParams).
+        // generateCodeChallenge() is the single shared hash used at token verification time
+        // (client must have produced code_challenge the same way from code_verifier).
+        const storedChallenge = String(params.code_challenge).trim();
+
         const code = generateAuthCode();
         authCodes.set(code, {
             userId: user.id,
             clientId: params.client_id,
             redirectUri: params.redirect_uri,
-            codeChallenge: params.code_challenge,
+            codeChallenge: storedChallenge,
             codeChallengeMethod: params.code_challenge_method,
             scope: params.scope,
             expiresAt: Date.now() + AUTH_CODE_TTL_MS,
         });
+
+        console.log('[oauth/authorize] Stored challenge (from client):', storedChallenge);
+        console.log(
+            '[oauth/authorize] Hash helper ready (generateCodeChallenge):',
+            typeof generateCodeChallenge === 'function'
+        );
 
         const redirectUrl = new URL(params.redirect_uri);
         redirectUrl.searchParams.set('code', code);
@@ -426,20 +435,17 @@ router.post('/token', (req, res) => {
         });
     }
 
-    // --- PKCE S256 verification (Node digest('base64url')) ---
-    const computedChallenge = computeS256Challenge(code_verifier);
+    // --- PKCE S256 verification (shared generateCodeChallenge) ---
+    const storedChallenge = stored.codeChallenge;
 
-    // TEMP debug logs
-    console.log('[oauth/token] Stored challenge :', stored.codeChallenge);
-    console.log('[oauth/token] Computed challenge:', computedChallenge);
-    console.log('[oauth/token] code_verifier     :', code_verifier);
-    console.log('[oauth/token] Method            :', stored.codeChallengeMethod);
+    console.log('Verifier received :', code_verifier);
+    console.log('Stored challenge  :', storedChallenge);
+    console.log('Computed challenge:', generateCodeChallenge(code_verifier));
 
     if (
         stored.codeChallengeMethod !== 'S256' ||
-        computedChallenge !== stored.codeChallenge
+        generateCodeChallenge(code_verifier) !== storedChallenge
     ) {
-        console.log('[oauth/token] PKCE mismatch');
         return res.status(400).json({
             error: 'invalid_grant',
             error_description: 'Invalid code_verifier (PKCE verification failed)',
