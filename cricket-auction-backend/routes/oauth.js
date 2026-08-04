@@ -29,6 +29,79 @@ function generateAuthCode() {
     return crypto.randomBytes(32).toString('base64url');
 }
 
+// ---------------------------------------------------------------------------
+// In-memory rate limiter (single-process; fine for one Render instance)
+//
+// Fixed window per IP: count requests in a window; when max is exceeded,
+// respond 429 until the window resets. Maps are cleaned periodically so
+// memory does not grow unbounded. Not shared across multiple instances.
+// ---------------------------------------------------------------------------
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+
+/**
+ * Build Express middleware that allows `max` requests per IP per window.
+ * @param {number} max - Max requests allowed in the window
+ * @param {string} label - Short name for optional debug (authorize|token|register)
+ */
+function createRateLimiter(max, label) {
+    /** @type {Map<string, { count: number, resetAt: number }>} */
+    const hits = new Map();
+
+    // Drop expired entries so the Map does not grow forever
+    const cleanup = setInterval(() => {
+        const now = Date.now();
+        for (const [ip, entry] of hits.entries()) {
+            if (entry.resetAt <= now) {
+                hits.delete(ip);
+            }
+        }
+    }, RATE_LIMIT_WINDOW_MS);
+    // Allow Node to exit without waiting on this timer (if tests/stop server)
+    if (typeof cleanup.unref === 'function') {
+        cleanup.unref();
+    }
+
+    return function rateLimitMiddleware(req, res, next) {
+        // Prefer Express req.ip (honors trust proxy when configured)
+        const ip =
+            req.ip ||
+            req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim() ||
+            req.socket?.remoteAddress ||
+            'unknown';
+
+        const now = Date.now();
+        let entry = hits.get(ip);
+
+        if (!entry || entry.resetAt <= now) {
+            entry = { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
+            hits.set(ip, entry);
+        }
+
+        entry.count += 1;
+
+        if (entry.count > max) {
+            res.setHeader(
+                'Retry-After',
+                Math.max(1, Math.ceil((entry.resetAt - now) / 1000))
+            );
+            return res.status(429).json({
+                error: 'rate_limit_exceeded',
+                error_description:
+                    'Too many requests. Please try again later.',
+            });
+        }
+
+        return next();
+    };
+}
+
+// Shared bucket for GET+POST /authorize (20 per IP / 15 min)
+const authorizeRateLimit = createRateLimiter(20, 'authorize');
+// POST /token (10 per IP / 15 min)
+const tokenRateLimit = createRateLimiter(10, 'token');
+// POST /register (10 per IP / 15 min)
+const registerRateLimit = createRateLimiter(10, 'register');
+
 /**
  * PKCE S256 helper — used ONLY for token-endpoint verification.
  * Hashes verifier as ASCII; digests as base64url (no manual base64 transforms).
@@ -288,7 +361,7 @@ function handleClientRegistration(req, res) {
     });
 }
 
-router.post('/register', handleClientRegistration);
+router.post('/register', registerRateLimit, handleClientRegistration);
 
 /**
  * RFC 8414 OAuth 2.0 Authorization Server Metadata.
@@ -334,7 +407,7 @@ router.get('/.well-known/oauth-authorization-server', (req, res) => {
  *   response_type, client_id, redirect_uri, state,
  *   code_challenge, code_challenge_method
  */
-router.get('/authorize', (req, res) => {
+router.get('/authorize', authorizeRateLimit, (req, res) => {
     const result = validateAuthorizeParams(req.query);
     if (!result.ok) {
         return res.status(result.status).json(result.body);
@@ -350,7 +423,7 @@ router.get('/authorize', (req, res) => {
  * Handles login form submit: verify email/password against users table
  * (same rules as /api/auth/login), then issue auth code and redirect.
  */
-router.post('/authorize', async (req, res) => {
+router.post('/authorize', authorizeRateLimit, async (req, res) => {
     const result = validateAuthorizeParams(req.body);
     if (!result.ok) {
         return res.status(result.status).json(result.body);
@@ -441,7 +514,7 @@ router.post('/authorize', async (req, res) => {
  *   client_id      required (must match authorize)
  *   code_verifier  required (PKCE)
  */
-router.post('/token', (req, res) => {
+router.post('/token', tokenRateLimit, (req, res) => {
     const {
         grant_type,
         code,
