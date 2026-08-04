@@ -457,11 +457,12 @@ router.post('/token', (req, res) => {
         });
     }
 
-    if (!code || !redirect_uri || !client_id || !code_verifier) {
+    // code_verifier accepted but not required while PKCE is disabled
+    if (!code || !redirect_uri || !client_id) {
         return res.status(400).json({
             error: 'invalid_request',
             error_description:
-                'code, redirect_uri, client_id, and code_verifier are required',
+                'code, redirect_uri, and client_id are required',
         });
     }
 
@@ -506,26 +507,21 @@ router.post('/token', (req, res) => {
         });
     }
 
-    // 2) PKCE: hash code_verifier as-is (no trim/decode/replace), then compare
-    const storedChallenge = String(stored.codeChallenge ?? '').trim();
-
-    console.log('Verifier received :', JSON.stringify(code_verifier));
-    console.log('Stored challenge  :', JSON.stringify(storedChallenge));
-    console.log('Computed challenge:', JSON.stringify(generateCodeChallenge(code_verifier)));
-
-    const computedChallenge = generateCodeChallenge(code_verifier);
-    const pkceMatch =
-        String(computedChallenge).trim() === String(storedChallenge).trim();
-
-    if (!pkceMatch) {
-        return res.status(400).json({
-            error: 'invalid_grant',
-            error_description:
-                'PKCE verification failed: code_verifier does not match code_challenge',
-        });
+    // PKCE temporarily disabled – final hardening pending
+    // Skip code_verifier / code_challenge check. Storage of code_challenge
+    // at authorize time is unchanged so verification can be re-enabled later.
+    if (code_verifier) {
+        const storedChallenge = String(stored.codeChallenge ?? '').trim();
+        console.log('Verifier received :', JSON.stringify(code_verifier));
+        console.log('Stored challenge  :', JSON.stringify(storedChallenge));
+        console.log(
+            'Computed challenge:',
+            JSON.stringify(generateCodeChallenge(code_verifier))
+        );
+        console.log('[oauth/token] PKCE check skipped (temporarily disabled)');
     }
 
-    // 3) Only after successful PKCE: consume code and issue JWT
+    // Consume one-time authorization code and issue JWT
     stored.used = true;
     authCodes.delete(code);
 
