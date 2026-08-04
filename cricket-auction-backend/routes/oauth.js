@@ -426,22 +426,18 @@ router.post('/token', (req, res) => {
         });
     }
 
-    // code_verifier still accepted from clients but not validated while PKCE is disabled
-    if (!code || !redirect_uri || !client_id) {
+    if (!code || !redirect_uri || !client_id || !code_verifier) {
         return res.status(400).json({
             error: 'invalid_request',
-            error_description: 'code, redirect_uri, and client_id are required',
+            error_description:
+                'code, redirect_uri, client_id, and code_verifier are required',
         });
     }
 
     cleanupExpiredCodes();
 
+    // 1) Authorization code must exist, not be used, and not be expired
     const stored = authCodes.get(code);
-    console.log('[oauth/token] Auth code found:', !!stored);
-    if (stored) {
-        console.log('[oauth/token] Auth code already used:', !!stored.used);
-        console.log('[oauth/token] Auth code expired:', stored.expiresAt <= Date.now());
-    }
 
     if (!stored) {
         return res.status(400).json({
@@ -479,26 +475,25 @@ router.post('/token', (req, res) => {
         });
     }
 
-    // ---------------------------------------------------------------------------
-    // TEMPORARILY DISABLED: PKCE verification (code_verifier / code_challenge)
-    // Re-enable before production. Token is issued after auth-code checks only.
-    // ---------------------------------------------------------------------------
-    // const storedChallenge = String(stored.codeChallenge ?? '').trim();
-    // const computedChallenge = generateCodeChallenge(String(code_verifier).trim());
-    // if (computedChallenge !== storedChallenge) { ... }
-    console.log(
-        '[oauth/token] PKCE verification TEMPORARILY DISABLED — skipping code_verifier check'
+    // 2) PKCE: compute challenge from verifier and compare to stored challenge
+    const storedChallenge = String(stored.codeChallenge ?? '').trim();
+    const computedChallenge = generateCodeChallenge(
+        String(code_verifier).trim()
     );
-    if (code_verifier) {
-        console.log('[oauth/token] code_verifier received (not validated):', code_verifier);
-        console.log(
-            '[oauth/token] would-be computed challenge:',
-            generateCodeChallenge(String(code_verifier).trim())
-        );
-        console.log('[oauth/token] stored challenge:', stored.codeChallenge);
+    const pkceMatch = computedChallenge === storedChallenge;
+
+    console.log('[oauth/token] Stored challenge:', storedChallenge);
+    console.log('[oauth/token] Computed challenge:', computedChallenge);
+    console.log('[oauth/token] PKCE match:', pkceMatch);
+
+    if (!pkceMatch) {
+        return res.status(400).json({
+            error: 'invalid_grant',
+            error_description: 'PKCE verification failed: code_verifier does not match code_challenge',
+        });
     }
 
-    // Consume one-time authorization code
+    // 3) Only after successful PKCE: consume code and issue JWT
     stored.used = true;
     authCodes.delete(code);
 
