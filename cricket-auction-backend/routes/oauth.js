@@ -525,20 +525,22 @@ router.post('/token', (req, res) => {
     stored.used = true;
     authCodes.delete(code);
 
-    // Same JWT format as routes/auth.js login
+    // Same JWT format as routes/auth.js login — payload stays { id } only for now
     const accessToken = jwt.sign({ id: stored.userId }, JWT_SECRET, {
         expiresIn: '7d',
     });
+
+    // OAuth scopes advertised to the client (not yet enforced in the JWT).
+    // Full read set for MCP/tool access; fine-grained scope checks can come later.
+    const OAUTH_READ_SCOPES =
+        'read tournament:read player:read auction:read team:read';
 
     const response = {
         access_token: accessToken,
         token_type: 'Bearer',
         expires_in: ACCESS_TOKEN_EXPIRES_IN,
+        scope: OAUTH_READ_SCOPES,
     };
-
-    if (stored.scope) {
-        response.scope = stored.scope;
-    }
 
     return res.json(response);
 });
