@@ -30,13 +30,13 @@ function generateAuthCode() {
 }
 
 /**
- * Shared PKCE S256 helper — identical hashing for authorize/token.
- * Uses only Node's built-in base64url digest (no manual base64 transforms).
+ * PKCE S256 helper — used ONLY for token-endpoint verification.
+ * Hashes verifier as ASCII; digests as base64url (no manual base64 transforms).
  */
 function generateCodeChallenge(verifier) {
     return require('crypto')
         .createHash('sha256')
-        .update(verifier)
+        .update(String(verifier), 'ascii') // force ASCII
         .digest('base64url');
 }
 
@@ -396,9 +396,7 @@ router.post('/authorize', async (req, res) => {
 
         cleanupExpiredCodes();
 
-        // Store client code_challenge exactly as received (trimmed in validateAuthorizeParams).
-        // generateCodeChallenge() is the single shared hash used at token verification time
-        // (client must have produced code_challenge the same way from code_verifier).
+        // Store code_challenge exactly as received (trimmed only — no re-hash).
         const storedChallenge = String(params.code_challenge).trim();
 
         const code = generateAuthCode();
@@ -407,7 +405,6 @@ router.post('/authorize', async (req, res) => {
             clientId: params.client_id,
             redirectUri: params.redirect_uri,
             codeChallenge: storedChallenge,
-            // Normalize method so token compare never fails on whitespace/case
             codeChallengeMethod: String(params.code_challenge_method || 'S256').trim(),
             scope: params.scope,
             expiresAt: Date.now() + AUTH_CODE_TTL_MS,
@@ -509,21 +506,22 @@ router.post('/token', (req, res) => {
         });
     }
 
-    // 2) PKCE: compute challenge from verifier and compare to stored challenge
+    // 2) PKCE: hash code_verifier as-is (no trim/decode/replace), then compare
     const storedChallenge = String(stored.codeChallenge ?? '').trim();
-    const computedChallenge = generateCodeChallenge(
-        String(code_verifier).trim()
-    );
-    const pkceMatch = computedChallenge === storedChallenge;
 
-    console.log('[oauth/token] Stored challenge:', storedChallenge);
-    console.log('[oauth/token] Computed challenge:', computedChallenge);
-    console.log('[oauth/token] PKCE match:', pkceMatch);
+    console.log('Verifier received :', JSON.stringify(code_verifier));
+    console.log('Stored challenge  :', JSON.stringify(storedChallenge));
+    console.log('Computed challenge:', JSON.stringify(generateCodeChallenge(code_verifier)));
+
+    const computedChallenge = generateCodeChallenge(code_verifier);
+    const pkceMatch =
+        String(computedChallenge).trim() === String(storedChallenge).trim();
 
     if (!pkceMatch) {
         return res.status(400).json({
             error: 'invalid_grant',
-            error_description: 'PKCE verification failed: code_verifier does not match code_challenge',
+            error_description:
+                'PKCE verification failed: code_verifier does not match code_challenge',
         });
     }
 
