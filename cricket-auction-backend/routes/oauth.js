@@ -291,6 +291,40 @@ function handleClientRegistration(req, res) {
 router.post('/register', handleClientRegistration);
 
 /**
+ * RFC 8414 OAuth 2.0 Authorization Server Metadata.
+ *
+ * Mounted at:
+ *   GET /.well-known/oauth-authorization-server  (via app.use('/', oauthRoutes))
+ *
+ * Endpoints advertised at root (/authorize, /token, /register) to match
+ * the dual mount of this router at / and /oauth.
+ */
+const DEFAULT_OAUTH_ISSUER = 'https://cricket-auction-app-66aj.onrender.com';
+
+function getOAuthIssuer() {
+    const fromEnv = process.env.OAUTH_ISSUER || process.env.BASE_URL;
+    if (fromEnv) {
+        return String(fromEnv).replace(/\/$/, '');
+    }
+    return DEFAULT_OAUTH_ISSUER;
+}
+
+router.get('/.well-known/oauth-authorization-server', (req, res) => {
+    const issuer = getOAuthIssuer();
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    return res.json({
+        issuer,
+        authorization_endpoint: `${issuer}/authorize`,
+        token_endpoint: `${issuer}/token`,
+        registration_endpoint: `${issuer}/register`,
+        response_types_supported: ['code'],
+        grant_types_supported: ['authorization_code'],
+        code_challenge_methods_supported: ['S256'],
+        token_endpoint_auth_methods_supported: ['none'],
+    });
+});
+
+/**
  * GET /oauth/authorize
  *
  * OAuth 2.1 Authorization Code + PKCE.

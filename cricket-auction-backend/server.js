@@ -97,7 +97,8 @@ app.use('/api/tournaments', tournamentRoutes);
 app.use('/api/teams', teamRoutes);
 app.use('/api/players', playerRoutes);
 app.use('/api/auction', auctionRoutes);
-// OAuth at /oauth/* and root aliases (/authorize, /token, /register)
+// OAuth at /oauth/* and root aliases (/authorize, /token, /register,
+// /.well-known/oauth-authorization-server)
 app.use('/oauth', oauthRoutes);
 app.use('/', oauthRoutes);
 
